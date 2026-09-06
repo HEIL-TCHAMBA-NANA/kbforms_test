@@ -1,0 +1,60 @@
+<?php
+/**
+ * Configuration email de KBForms.
+ *
+ * 1. Copiez ce fichier en `mail.php` (même dossier).
+ * 2. Renseignez vos identifiants SMTP.
+ * 3. C'est tout — `MailService` le charge automatiquement.
+ *
+ * `mail.php` est ignoré par git (il contient un mot de passe).
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ *  driver :
+ *    'smtp'  → envoi via un serveur SMTP (RECOMMANDÉ, marche sans rien installer)
+ *    'mail'  → fonction mail() de PHP (nécessite sendmail/postfix sur la machine)
+ *    'log'   → n'envoie rien, écrit le message dans app/logs/mail.log
+ *
+ *  encryption :
+ *    'tls'  → STARTTLS, port 587 (le plus courant)
+ *    'ssl'  → SSL implicite, port 465
+ *    ''     → aucune (déconseillé, sauf relais local)
+ * ───────────────────────────────────────────────────────────────────────────
+ *
+ *  Exemples de fournisseurs :
+ *
+ *  • Gmail / Google Workspace
+ *      host 'smtp.gmail.com', port 587, encryption 'tls'
+ *      username = votre adresse Gmail
+ *      password = un « mot de passe d'application » (compte Google → Sécurité →
+ *                 Validation en 2 étapes → Mots de passe des applications)
+ *
+ *  • Brevo (ex-Sendinblue) — offre gratuite 300 mails/jour
+ *      host 'smtp-relay.brevo.com', port 587, encryption 'tls'
+ *      username = login SMTP Brevo, password = clé SMTP
+ *
+ *  • Mailgun
+ *      host 'smtp.mailgun.org', port 587, encryption 'tls'
+ *      username 'postmaster@mg.votre-domaine.com', password = mot de passe SMTP
+ *
+ *  • Mailtrap (bac à sable pour tester sans rien envoyer pour de vrai)
+ *      host 'sandbox.smtp.mailtrap.io', port 587, encryption 'tls'
+ */
+
+return [
+    'driver'     => 'smtp',
+
+    'host'       => 'smtp.gmail.com',
+    'port'       => 587,
+    'encryption' => 'tls',
+
+    'username'   => 'votre-adresse@gmail.com',
+    'password'   => 'xxxx xxxx xxxx xxxx',
+
+    // Expéditeur affiché. Avec Gmail, gardez votre adresse Gmail ici,
+    // sinon le message peut être rejeté ou classé en spam.
+    'from_email' => 'votre-adresse@gmail.com',
+    'from_name'  => 'KBForms',
+
+    'timeout'    => 15,
+    'debug'      => false, // true = trace le dialogue SMTP dans le log d'erreurs
+];

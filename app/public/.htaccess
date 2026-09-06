@@ -1,0 +1,16 @@
+# Activer la réécriture d'URL
+RewriteEngine On
+
+# CRITIQUE : forwarder le header Authorization à PHP
+# Sans cette ligne, Apache supprime Authorization et PHP reçoit un token vide → 401
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Laisser passer les fichiers et dossiers existants (assets CSS/JS/images)
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Tout le reste → index.php
+RewriteRule ^ index.php [QSA,L]

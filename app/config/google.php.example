@@ -1,0 +1,31 @@
+<?php
+/**
+ * Connexion « Continuer avec Google » (OAuth 2.0 — Authorization Code flow).
+ *
+ * 1. Console Google Cloud → API et services → Écran de consentement OAuth
+ *    - Type : Externe · ajoutez votre email en utilisateur de test
+ *    - Scopes : openid, email, profile (par défaut)
+ * 2. → Identifiants → Créer des identifiants → ID client OAuth → Application Web
+ *    - Origines JavaScript autorisées : http://localhost
+ *    - URI de redirection autorisés   : http://localhost/auth/google/callback
+ *      (Google refuse les IP brutes et le HTTP hors localhost — voir note plus bas)
+ * 3. Copiez l'ID client + le secret ci-dessous, et ce fichier en `google.php`.
+ *
+ * NOTE réseau : Google n'accepte comme URI de redirection non-HTTPS que
+ * http://localhost (et 127.0.0.1). Le bouton Google marche donc quand on ouvre
+ * l'app sur http://localhost. Pour le tester depuis un téléphone / une autre
+ * machine, il faut du HTTPS + un vrai domaine (ou un tunnel type ngrok dont on
+ * enregistre l'URL dans la console Google et dans 'redirect_uri' ci-dessous).
+ */
+
+return [
+    'client_id'     => 'xxxxxxxx.apps.googleusercontent.com',
+    'client_secret' => 'GOCSPX-xxxxxxxxxxxxxxxxxxxx',
+
+    // Laisser null = déduit automatiquement : <base_url>/auth/google/callback.
+    // À forcer si vous utilisez un tunnel/domaine : 'https://mondomaine/auth/google/callback'
+    'redirect_uri'  => null,
+
+    // account_type attribué aux comptes créés via Google.
+    'default_account_type' => 'individual',
+];

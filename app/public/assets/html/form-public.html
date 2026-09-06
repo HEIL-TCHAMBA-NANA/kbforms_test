@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Formulaire · KBForms</title>
+  <meta name="description" content="Répondez à ce formulaire." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    html, body { overflow-x: hidden; }
+    /* Empêche une longue chaîne sans espace (titre / description / libellé)
+       de faire déborder la carte horizontalement. */
+    #card, #card h1, #card h2, #card h3, #card p, #card label, #card span, #card li, #card div {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      min-width: 0;
+    }
+  </style>
+</head>
+<body class="min-h-screen" style="background:#F9FAFB">
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="theme-bar" class="w-full bg-center bg-cover" style="height:8rem;background-color:#4F46E5"></div>
+
+  <main class="max-w-2xl w-full mx-auto -mt-16 px-4 pb-12 min-w-0">
+    <div id="card" class="bg-white rounded-2xl shadow-xl p-6 md:p-8 animate-fade-in">
+      <div class="kb-skeleton h-64"></div>
+    </div>
+    <div class="flex items-center justify-center gap-1.5 text-xs text-gray-400 mt-6">Propulsé par <img src="/assets/images/kbforms-mark.svg" alt="" class="w-4 h-4"><b class="text-gray-500">KBForms</b></div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script>
+    // Extraire le token depuis le path /f/{token} OU depuis ?token=
+    const pathMatch = window.location.pathname.match(/^\/f\/([a-zA-Z0-9]+)$/);
+    const token   = pathMatch ? pathMatch[1] : getQueryParam('token');
+    const formId  = getQueryParam('id');
+    const preview = getQueryParam('preview') === '1';
+    let form = null, sections = [], questions = [], choiceLists = [], repeatGroups = [], currentSection = 0, answers = {}, unlocked = false;
+    const mediaAnswers = {};  // qid -> { dataUri, mime, url } (audio/vidéo, B5)
+    const repeatState = {};   // gid -> nombre d'occurrences affichées (B8)
+
+    // ── Logique conditionnelle ───────────────────────────────────────────────
+    // null = aucune règle définie → toutes les sections sont visibles
+    // array = liste des section IDs visibles selon les réponses courantes
+    let visibleSectionIds = null;
+
+    // ── Liste pays + indicatifs + patterns de validation ─────────────────────
+    const PHONE_COUNTRIES = [
+      { code: 'CM', name: 'Cameroun',          dial: '+237', flag: '🇨🇲', pattern: /^6[5-9]\d{7}$/ },
+      { code: 'CI', name: "Côte d'Ivoire",     dial: '+225', flag: '🇨🇮', pattern: /^[0-9]{10}$/ },
+      { code: 'SN', name: 'Sénégal',           dial: '+221', flag: '🇸🇳', pattern: /^[37][0-9]{8}$/ },
+      { code: 'ML', name: 'Mali',              dial: '+223', flag: '🇲🇱', pattern: /^[267][0-9]{7}$/ },
+      { code: 'BF', name: 'Burkina Faso',      dial: '+226', flag: '🇧🇫', pattern: /^[267][0-9]{7}$/ },
+      { code: 'GN', name: 'Guinée',            dial: '+224', flag: '🇬🇳', pattern: /^[67][0-9]{8}$/ },
+      { code: 'BJ', name: 'Bénin',             dial: '+229', flag: '🇧🇯', pattern: /^[69][0-9]{7}$/ },
+      { code: 'TG', name: 'Togo',              dial: '+228', flag: '🇹🇬', pattern: /^[97][0-9]{7}$/ },
+      { code: 'NE', name: 'Niger',             dial: '+227', flag: '🇳🇪', pattern: /^[79][0-9]{7}$/ },
+      { code: 'CD', name: 'RD Congo',          dial: '+243', flag: '🇨🇩', pattern: /^8[0-9]{8}$/ },
+      { code: 'GA', name: 'Gabon',             dial: '+241', flag: '🇬🇦', pattern: /^0[67][0-9]{6}$/ },
+      { code: 'CG', name: 'Congo-Brazzaville', dial: '+242', flag: '🇨🇬', pattern: /^[06][0-9]{7}$/ },
+      { code: 'NG', name: 'Nigéria',           dial: '+234', flag: '🇳🇬', pattern: /^[789][01]\d{8}$/ },
+      { code: 'GH', name: 'Ghana',             dial: '+233', flag: '🇬🇭', pattern: /^[235][0-9]{8}$/ },
+      { code: 'MA', name: 'Maroc',             dial: '+212', flag: '🇲🇦', pattern: /^[67][0-9]{8}$/ },
+      { code: 'DZ', name: 'Algérie',           dial: '+213', flag: '🇩🇿', pattern: /^[5-7][0-9]{8}$/ },
+      { code: 'TN', name: 'Tunisie',           dial: '+216', flag: '🇹🇳', pattern: /^[2-9][0-9]{7}$/ },
+      { code: 'FR', name: 'France',            dial: '+33',  flag: '🇫🇷', pattern: /^[67][0-9]{8}$/ },
+      { code: 'BE', name: 'Belgique',          dial: '+32',  flag: '🇧🇪', pattern: /^4[5-9][0-9]{7}$/ },
+      { code: 'CH', name: 'Suisse',            dial: '+41',  flag: '🇨🇭', pattern: /^7[5-9][0-9]{7}$/ },
+      { code: 'US', name: 'États-Unis',        dial: '+1',   flag: '🇺🇸', pattern: /^[2-9][0-9]{9}$/ },
+      { code: 'GB', name: 'Royaume-Uni',       dial: '+44',  flag: '🇬🇧', pattern: /^7[0-9]{9}$/ },
+      { code: 'DE', name: 'Allemagne',         dial: '+49',  flag: '🇩🇪', pattern: /^1[5-7][0-9]{9,10}$/ },
+      { code: 'ES', name: 'Espagne',           dial: '+34',  flag: '🇪🇸', pattern: /^[67][0-9]{8}$/ },
+      { code: 'IT', name: 'Italie',            dial: '+39',  flag: '🇮🇹', pattern: /^3[0-9]{9}$/ },
+      { code: 'PT', name: 'Portugal',          dial: '+351', flag: '🇵🇹', pattern: /^9[1-6][0-9]{7}$/ },
+      { code: 'BR', name: 'Brésil',            dial: '+55',  flag: '🇧🇷', pattern: /^[689][0-9]{10}$/ },
+      { code: 'CN', name: 'Chine',             dial: '+86',  flag: '🇨🇳', pattern: /^1[3-9][0-9]{9}$/ },
+      { code: 'IN', name: 'Inde',              dial: '+91',  flag: '🇮🇳', pattern: /^[6-9][0-9]{9}$/ },
+    ];
+
+    // Mise à jour d'une réponse téléphone + validation en temps réel
+    function setPhone(qid) {
+      const countryCode = document.getElementById(`phone-country-${qid}`)?.value || '';
+      const number      = document.getElementById(`phone-number-${qid}`)?.value.replace(/\s/g, '') || '';
+      answers[qid] = { country: countryCode, number };
+
+      // Validation live si pays + numéro renseignés
+      const errEl = document.getElementById(`phone-err-${qid}`);
+      if (errEl && countryCode && number) {
+        const country = PHONE_COUNTRIES.find(c => c.code === countryCode);
+        const valid = country ? country.pattern.test(number) : true;
+        errEl.classList.toggle('hidden', valid);
+      } else if (errEl) {
+        errEl.classList.add('hidden');
+      }
+      scheduleEvaluate();
+    }
+
+    init();
+
+    async function init() {
+      let ok, status, data;
+
+      if (token) {
+        ({ ok, status, data } = await KBF_API.get(`/f/${token}`, false));
+      } else if (formId) {
+        ({ ok, status, data } = await KBF_API.get(`/forms/${formId}`));
+        if (ok && preview) {
+          hydrate(data);
+          return;
+        }
+      } else {
+        renderError('Lien invalide.');
+        return;
+      }
+
+      if (status === 403 || data?.protected || data?.requires_password) {
+        renderPasswordPrompt();
+        return;
+      }
+      if (!ok) { renderError(); return; }
+      hydrate(data);
+    }
+
+    async function hydrate(data) {
+      form      = data.form || data;
+      questions = data.questions || form.questions || [];
+      sections  = data.sections  || form.sections  || [];
+      choiceLists = data.choice_lists || [];
+      repeatGroups = data.repeat_groups || [];
+
+      // Aperçu interne : GET /forms/{id} ne renvoie que la ligne `forms`
+      // (ni questions ni sections) → charger les questions séparément.
+      if (questions.length === 0 && preview && (form.id || formId)) {
+        const qRes = await KBF_API.get(`/forms/${form.id || formId}/questions`, true);
+        if (qRes.ok && Array.isArray(qRes.data)) questions = qRes.data;
+      }
+
+      // Listes en cascade : absentes de l'aperçu interne → les charger.
+      // BUGFIX : ces routes sont protégées côté serveur ; un répondant anonyme
+      // (token de partage, pas de session) n'a pas de jeton, donc `auth: true`
+      // provoquait un 401 → redirection globale vers /login (cf. api.js) et
+      // rendait TOUT formulaire public inutilisable. Même correctif que la
+      // récupération des sections juste en dessous : `!token`.
+      if (choiceLists.length === 0 && (form.id || formId)) {
+        const clRes = await KBF_API.get(`/forms/${form.id || formId}/choice-lists`, !token);
+        if (clRes.ok && Array.isArray(clRes.data?.choice_lists)) choiceLists = clRes.data.choice_lists;
+      }
+      // Groupes répétables : idem pour l'aperçu interne.
+      if (repeatGroups.length === 0 && (form.id || formId)) {
+        const rgRes = await KBF_API.get(`/forms/${form.id || formId}/repeat-groups`, !token);
+        if (rgRes.ok && Array.isArray(rgRes.data?.repeat_groups)) repeatGroups = rgRes.data.repeat_groups;
+      }
+
+      // FIX: si sections absentes du payload public, les charger via /forms/{id}/sections
+      if (sections.length === 0 && form.id) {
+        const sRes = await KBF_API.get(`/forms/${form.id}/sections`, !token);
+        if (sRes.ok && Array.isArray(sRes.data) && sRes.data.length > 0) {
+          sections = sRes.data;
+        }
+      }
+      // Fallback : section unique si vraiment aucune section
+      if (sections.length === 0) sections = [{ id: null, index: 0, title: '' }];
+
+      // index = valeur à comparer avec question.section_index.
+      // Priorité : index fourni > position en base > rang dans le tableau.
+      sections = sections.map((s, i) => ({
+        ...s,
+        index: s.index !== undefined ? Number(s.index)
+             : s.position !== undefined && s.position !== null ? Number(s.position)
+             : i
+      }));
+
+      const color = form.theme_color || '#4F46E5';
+      const bar = document.getElementById('theme-bar');
+      if (form.header_image) {
+        bar.style.backgroundColor = color;
+        bar.style.backgroundImage = `url("${String(form.header_image).replace(/"/g, '%22')}")`;
+        bar.style.height = '13rem';
+      } else {
+        bar.style.backgroundImage = 'none';
+        bar.style.backgroundColor = color;
+        bar.style.height = '8rem';
+      }
+      document.title = (form.title || 'Formulaire') + ' · KBForms';
+      if (form.require_captcha) ensurePublicCaptchaKey();
+      render();
+      evaluateLogic();
+    }
+
+    // ── Évaluation de la logique conditionnelle ──────────────────────────────
+    // Appelée après chaque changement de réponse (debounce 300ms).
+    // Met à jour visibleSectionIds et re-render si nécessaire.
+    let _evalTimer = null;
+    async function evaluateLogic() {
+      // Pas d'ID de formulaire → impossible d'appeler l'endpoint
+      if (!form?.id) return;
+
+      // Convertit answers en map question_id (int) → valeur
+      const answersPayload = {};
+      for (const [qid, val] of Object.entries(answers)) {
+        answersPayload[Number(qid)] = val;
+      }
+
+      const { ok, data } = await KBF_API.post(
+        `/forms/${form.id}/logic/evaluate`,
+        { answers: answersPayload },
+        false   // pas d'auth requise (formulaire public)
+      );
+
+      if (!ok) return;
+
+      const newIds = data.visible_section_ids ?? null;
+      if (JSON.stringify(visibleSectionIds) === JSON.stringify(newIds)) return;
+      visibleSectionIds = newIds;
+      _adjustCurrentSection();
+      render();
+    }
+
+    function scheduleEvaluate() {
+      clearTimeout(_evalTimer);
+      _evalTimer = setTimeout(evaluateLogic, 800);
+    }
+
+    // ── Visibilité des sections ──────────────────────────────────────────────
+    function isSectionVisible(sec) {
+      // Aucune règle définie → tout visible
+      if (visibleSectionIds === null) return true;
+      // Section sans ID (ex: section par défaut) → toujours visible
+      if (sec.id == null) return true;
+      return visibleSectionIds.includes(Number(sec.id));
+    }
+
+    // Retourne la liste ordonnée des sections visibles
+    function getVisibleSections() {
+      return sections.filter(isSectionVisible);
+    }
+
+    // Ajuste currentSection si la section courante devient invisible
+    function _adjustCurrentSection() {
+      const visible = getVisibleSections();
+      if (visible.length === 0) return;
+      // Retrouver l'index dans la liste visible à partir de l'index global
+      const currentSec = sections[currentSection];
+      const visIdx = visible.findIndex(s => s === currentSec);
+      if (visIdx === -1) {
+        // Section courante masquée → aller à la première visible
+        currentSection = sections.indexOf(visible[0]);
+      }
+    }
+
+    function renderPasswordPrompt() {
+      document.getElementById('card').innerHTML = `
+        <h1 class="text-xl font-bold mb-2 flex items-center gap-2">${kbIcon('lock','w-5 h-5 text-gray-500')} Formulaire protégé</h1>
+        <p class="text-sm text-gray-500 mb-4">Entrez le mot de passe pour accéder à ce formulaire.</p>
+        <input id="pwd" type="password" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3">
+        <button onclick="unlock()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2.5 rounded-lg">Accéder</button>
+        <p id="pwd-err" class="text-sm text-red-600 mt-2 hidden"></p>`;
+    }
+
+    async function unlock() {
+      const password = document.getElementById('pwd').value;
+      const { ok, data } = await KBF_API.post(`/f/${token}/unlock`, { password }, false);
+      if (ok) hydrate(data);
+      else { document.getElementById('pwd-err').textContent = 'Mot de passe incorrect'; document.getElementById('pwd-err').classList.remove('hidden'); }
+    }
+
+    function renderError(msg = 'Ce formulaire n\'est pas accessible.') {
+      document.getElementById('card').innerHTML = `<div class="text-center py-12"><div class="flex justify-center mb-3 text-gray-300">${kbIcon('frown','w-12 h-12')}</div><p class="text-gray-600">${escapeHtml(msg)}</p></div>`;
+    }
+
+    function render() {
+      recomputeCalculated();
+      const visible = getVisibleSections();
+      const sec = sections[currentSection];
+      const visibleIdx = visible.findIndex(s => s === sec);
+      const total = visible.length;
+      const progress = Math.round(((visibleIdx + 1) / total) * 100);
+      const color = form.theme_color || '#4F46E5';
+
+      const secIndex = sec.index !== undefined ? sec.index : currentSection;
+      const secQuestions = questions.filter(q => (q.section_index ?? 0) === secIndex);
+
+      document.getElementById('card').innerHTML = `
+        <div class="mb-6">
+          <div class="flex items-center justify-between text-xs text-gray-500 mb-2">
+            <span>Étape ${visibleIdx + 1} / ${total}</span>
+            <span>${progress}%</span>
+          </div>
+          <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full transition-all" style="width:${progress}%;background:${color}"></div></div>
+        </div>
+        ${visibleIdx === 0 ? `<h1 class="text-2xl font-bold mb-2" style="font-family:'Plus Jakarta Sans'">${escapeHtml(form.title)}</h1><p class="text-sm text-gray-600 mb-6">${escapeHtml(form.description||'')}</p>` : ''}
+        ${sec.title ? `<h2 class="text-lg font-semibold mb-4">${escapeHtml(sec.title)}</h2>` : ''}
+        <div class="space-y-6">${renderSectionBody(secQuestions)}</div>
+        <input type="text" id="hp-website" name="website" tabindex="-1" autocomplete="off" aria-hidden="true"
+               style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+        ${visibleIdx === total - 1 && form.require_captcha
+          ? '<div id="pub-captcha" class="mt-6 flex justify-center"></div>' : ''}
+        <div class="flex justify-between mt-8 pt-6 border-t border-gray-100">
+          <button onclick="prevSection()" ${visibleIdx===0?'disabled':''} class="bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 disabled:opacity-40 text-sm font-medium px-4 py-2 rounded-lg">Précédent</button>
+          ${visibleIdx < total - 1
+            ? `<button onclick="nextSection()" class="text-white text-sm font-medium px-4 py-2 rounded-lg" style="background:${color}">Suivant</button>`
+            : `<button onclick="submitForm()" class="text-white text-sm font-medium px-4 py-2 rounded-lg" style="background:${color}">Soumettre</button>`}
+        </div>`;
+
+      if (visibleIdx === total - 1 && form.require_captcha) mountPublicCaptcha();
+    }
+
+    // ── CAPTCHA optionnel du formulaire public ─────────────────────────────
+    let PUB_RC_KEY = null, pubRcId = null, pubRcReady = false;
+    async function ensurePublicCaptchaKey() {
+      if (PUB_RC_KEY !== null) return;
+      try {
+        const r = await fetch('/auth/config'); const c = await r.json();
+        PUB_RC_KEY = c?.recaptcha_site_key || '';
+      } catch { PUB_RC_KEY = ''; }
+      if (PUB_RC_KEY && !window.grecaptcha) {
+        window.kbfPubRcInit = () => { pubRcReady = true; mountPublicCaptcha(); };
+        const s = document.createElement('script');
+        s.src = 'https://www.google.com/recaptcha/api.js?onload=kbfPubRcInit&render=explicit';
+        s.async = true; s.defer = true; document.head.appendChild(s);
+      } else if (window.grecaptcha) { pubRcReady = true; }
+    }
+    function mountPublicCaptcha() {
+      ensurePublicCaptchaKey();
+      const el = document.getElementById('pub-captcha');
+      if (!el || !pubRcReady || !PUB_RC_KEY || el.dataset.done) return;
+      el.dataset.done = '1';
+      try { pubRcId = grecaptcha.render(el, { sitekey: PUB_RC_KEY }); } catch { el.dataset.done = ''; }
+    }
+
+    // ── Groupes de questions répétables (B8) ──────────────────────────────
+    function repeatGroupOf(q) {
+      return q.repeat_group_id ? repeatGroups.find(g => Number(g.id) === Number(q.repeat_group_id)) : null;
+    }
+    function repeatCount(g) {
+      if (repeatState[g.id] == null) repeatState[g.id] = Math.max(g.min_repeat || 0, 1);
+      return repeatState[g.id];
+    }
+    function addRepeat(gid) {
+      const g = repeatGroups.find(x => Number(x.id) === Number(gid));
+      const n = repeatCount(g);
+      if (g.max_repeat != null && n >= g.max_repeat) return;
+      repeatState[gid] = n + 1;
+      render();
+    }
+    function removeRepeat(gid, idx) {
+      const g = repeatGroups.find(x => Number(x.id) === Number(gid));
+      const n = repeatCount(g);
+      if (n <= 1 || n <= (g.min_repeat || 0)) return;
+      // Décaler les réponses des occurrences suivantes vers le bas.
+      const members = questions.filter(q => Number(q.repeat_group_id) === Number(gid));
+      for (let i = idx; i < n - 1; i++) {
+        members.forEach(m => { answers[`${m.id}#${i}`] = answers[`${m.id}#${i + 1}`]; });
+      }
+      members.forEach(m => { delete answers[`${m.id}#${n - 1}`]; });
+      repeatState[gid] = n - 1;
+      render();
+    }
+    function setRepeatAnswer(qid, idx, v) {
+      answers[`${qid}#${idx}`] = v;
+      refreshCalculatedDom();
+      scheduleEvaluate();
+    }
+    function renderSectionBody(secQuestions) {
+      const out = [];
+      const done = new Set();
+      for (const q of secQuestions) {
+        if (done.has(q.id)) continue;
+        const g = repeatGroupOf(q);
+        if (g) {
+          const members = secQuestions.filter(x => Number(x.repeat_group_id) === Number(g.id));
+          members.forEach(m => done.add(m.id));
+          out.push(renderRepeatGroup(g, members));
+        } else {
+          out.push(renderQuestion(q));
+        }
+      }
+      return out.join('');
+    }
+    function renderRepeatGroup(g, members) {
+      const n = repeatCount(g);
+      let blocks = '';
+      for (let idx = 0; idx < n; idx++) {
+        const removable = n > 1 && n > (g.min_repeat || 0);
+        blocks += `
+          <div class="border border-gray-200 rounded-xl p-4 mb-3 bg-gray-50/60">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">${escapeHtml(g.label)} ${idx + 1}</span>
+              ${removable ? `<button type="button" onclick="removeRepeat(${g.id}, ${idx})" class="text-xs text-red-500 hover:underline">Retirer</button>` : ''}
+            </div>
+            <div class="space-y-4">${members.map(m => renderRepeatField(m, idx)).join('')}</div>
+          </div>`;
+      }
+      const canAdd = g.max_repeat == null || n < g.max_repeat;
+      return `
+        <div data-rgid="${g.id}">
+          <label class="block text-sm font-semibold text-gray-800 mb-2">${escapeHtml(g.label)}
+            ${g.min_repeat ? `<span class="text-xs font-normal text-gray-400">(min. ${g.min_repeat})</span>` : ''}</label>
+          ${blocks}
+          ${canAdd ? `<button type="button" onclick="addRepeat(${g.id})" class="text-sm text-indigo-600 font-medium">+ Ajouter</button>` : ''}
+        </div>`;
+    }
+    function renderRepeatField(q, idx) {
+      const key = `${q.id}#${idx}`;
+      const v = answers[key];
+      const req = q.required ? '<span class="text-red-500">*</span>' : '';
+      const lbl = `<label class="block text-sm font-medium text-gray-800 mb-1">${escapeHtml(q.label)} ${req}</label>`;
+      const cls = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500';
+      const set = `setRepeatAnswer(${q.id}, ${idx}, this.value)`;
+      let field;
+      switch (q.type) {
+        case 'long_text':
+          field = `<textarea rows="3" oninput="${set}" class="${cls}">${escapeHtml(v || '')}</textarea>`; break;
+        case 'email':
+          field = `<input type="email" value="${escapeHtml(v || '')}" oninput="${set}" class="${cls}" placeholder="exemple@domaine.com">`; break;
+        case 'date':
+          field = `<input type="date" value="${escapeHtml(v || '')}" oninput="${set}" class="${cls}">`; break;
+        case 'time':
+          field = `<input type="time" value="${escapeHtml(v || '')}" oninput="${set}" class="${cls}">`; break;
+        case 'linear_scale': {
+          const mn = q.scale_min ?? 1, mx = q.scale_max ?? 5;
+          field = `<input type="number" min="${mn}" max="${mx}" value="${escapeHtml(v || '')}" oninput="${set}" class="${cls}">`; break;
+        }
+        case 'dropdown':
+          field = `<select onchange="${set}" class="${cls}"><option value="">— Choisir —</option>${(q.options || []).map(o => `<option ${v === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>`; break;
+        case 'radio':
+          field = `<div class="space-y-1.5">${(q.options || []).map(o => `<label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="q${q.id}_${idx}" class="kb-radio" ${v === o ? 'checked' : ''} onchange="setRepeatAnswer(${q.id}, ${idx}, '${escapeHtml(o).replace(/'/g, "&#39;")}')"><span class="text-sm">${escapeHtml(o)}</span></label>`).join('')}</div>`; break;
+        case 'checkbox': {
+          const arr = Array.isArray(v) ? v : [];
+          field = `<div class="space-y-1.5">${(q.options || []).map(o => `<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="kb-checkbox" ${arr.includes(o) ? 'checked' : ''} onchange="toggleRepeatCheckbox(${q.id}, ${idx}, '${escapeHtml(o).replace(/'/g, "&#39;")}', this.checked)"><span class="text-sm">${escapeHtml(o)}</span></label>`).join('')}</div>`; break;
+        }
+        default:
+          field = `<input type="text" value="${escapeHtml(v || '')}" oninput="${set}" class="${cls}">`;
+      }
+      return `<div>${lbl}${field}</div>`;
+    }
+    function toggleRepeatCheckbox(qid, idx, opt, checked) {
+      const key = `${qid}#${idx}`;
+      const arr = Array.isArray(answers[key]) ? answers[key] : [];
+      answers[key] = checked ? [...arr, opt] : arr.filter(x => x !== opt);
+      scheduleEvaluate();
+    }
+
+    function renderQuestion(q) {
+      const v = answers[q.id];
+      const req = q.required ? '<span class="text-red-500">*</span>' : '';
+      const help = q.help_text ? `<p class="text-xs text-gray-500 mt-1">${escapeHtml(q.help_text)}</p>` : '';
+      const wrapper = (inner) => `
+        <div data-qid="${q.id}">
+          <label class="block text-sm font-medium text-gray-800 mb-2">${escapeHtml(q.label)} ${req}</label>
+          ${inner}
+          ${help}
+        </div>`;
+      switch (q.type) {
+        case 'email':
+          return wrapper(`
+            <input type="email" inputmode="email" autocomplete="email"
+              oninput="setAnswerSilent(${q.id}, this.value)"
+              onblur="validateEmail(${q.id}, this.value); scheduleEvaluate()"
+              value="${escapeHtml(v||'')}"
+              class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+              placeholder="exemple@domaine.com">
+            <p id="email-err-${q.id}" class="text-xs text-red-500 mt-1 hidden">Veuillez entrer une adresse email valide.</p>`);
+        case 'short_text': return wrapper(`<input type="text" oninput="setAnswerSilent(${q.id}, this.value)" onblur="scheduleEvaluate()" value="${escapeHtml(v||'')}" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">`);
+        case 'long_text':  return wrapper(`<textarea rows="4" oninput="setAnswerSilent(${q.id}, this.value)" onblur="scheduleEvaluate()" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">${escapeHtml(v||'')}</textarea>`);
+        case 'date':       return wrapper(`<input type="date" oninput="setAnswer(${q.id}, this.value)" value="${escapeHtml(v||'')}" class="px-3 py-2 border border-gray-200 rounded-lg text-sm">`);
+        case 'time':       return wrapper(`<input type="time" oninput="setAnswer(${q.id}, this.value)" value="${escapeHtml(v||'')}" class="px-3 py-2 border border-gray-200 rounded-lg text-sm">`);
+        case 'dropdown': {
+          if (q.cascade_list_id) {
+            const items = cascadeItemsFor(q);
+            const blocked = isCascadeBlocked(q);
+            return wrapper(`<select ${blocked?'disabled':''} onchange="setCascadeAnswer(${q.id}, this.value)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm ${blocked?'bg-gray-50 text-gray-400':''}">
+              <option value="">${blocked ? "— Choisissez d'abord le niveau précédent —" : "— Choisir —"}</option>
+              ${items.map(it=>`<option ${v===it.label?'selected':''}>${escapeHtml(it.label)}</option>`).join('')}
+            </select>`);
+          }
+          return wrapper(`<select oninput="setAnswer(${q.id}, this.value)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"><option value="">— Choisir —</option>${(q.options||[]).map(o=>`<option ${v===o?'selected':''}>${escapeHtml(o)}</option>`).join('')}</select>`);
+        }
+        case 'radio': {
+          const src = q.cascade_list_id ? cascadeItemsFor(q).map(it=>it.label) : (q.options||[]);
+          const chg = q.cascade_list_id ? 'setCascadeAnswer' : 'setAnswer';
+          if (q.cascade_list_id && isCascadeBlocked(q)) {
+            return wrapper(`<p class="text-sm text-gray-400 italic">Choisissez d'abord le niveau précédent.</p>`);
+          }
+          return wrapper(`<div class="space-y-2">${src.map(o=>`<label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="q${q.id}" class="kb-radio" ${v===o?'checked':''} onchange="${chg}(${q.id}, '${escapeHtml(o).replace(/'/g,"&#39;")}')"><span class="text-sm">${escapeHtml(o)}</span></label>`).join('')}</div>`);
+        }
+        case 'checkbox': {
+          const arr = Array.isArray(v) ? v : [];
+          return wrapper(`<div class="space-y-2">${(q.options||[]).map(o=>`<label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" class="kb-checkbox" ${arr.includes(o)?'checked':''} onchange="toggleCheckbox(${q.id}, '${escapeHtml(o).replace(/'/g,"&#39;")}', this.checked)"><span class="text-sm">${escapeHtml(o)}</span></label>`).join('')}</div>`);
+        }
+        case 'linear_scale': {
+          const min = q.min||1, max = q.max||10;
+          return wrapper(`<input type="range" min="${min}" max="${max}" value="${v||min}" oninput="setAnswer(${q.id}, this.value); document.getElementById('val-${q.id}').textContent=this.value" class="w-full"><div class="flex justify-between text-xs text-gray-500 mt-1"><span>${min}</span><span id="val-${q.id}">${v||min}</span><span>${max}</span></div>`);
+        }
+        case 'grid': {
+          const rows = q.grid_rows || [], cols = q.grid_columns || [];
+          return wrapper(`<table class="w-full text-sm border-collapse"><thead><tr><th></th>${cols.map(c=>`<th class="text-xs font-medium text-gray-600 p-1">${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr><td class="text-sm p-1">${escapeHtml(r)}</td>${cols.map(c=>`<td class="text-center p-1"><input type="radio" name="q${q.id}-${r}" class="kb-radio" onchange="setGrid(${q.id}, '${r}', '${c}')"></td>`).join('')}</tr>`).join('')}</tbody></table>`);
+        }
+        case 'signature': {
+          if (typeof v === 'string' && v.startsWith('data:image')) {
+            return wrapper(`
+              <div class="border border-gray-200 rounded-lg p-2 bg-white inline-block">
+                <img src="${escapeHtml(v)}" alt="Signature" class="max-h-40">
+              </div>
+              <button type="button" onclick="sigReset(${q.id})" class="block mt-2 text-xs text-indigo-600 hover:underline">Recommencer</button>`);
+          }
+          return wrapper(sigPadHtml(q.id));
+        }
+        case 'calculated': {
+          const cv = answers[q.id];
+          return wrapper(`<div class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 font-medium text-gray-800">
+            <span id="calc-val-${q.id}">${cv === '' || cv == null ? '—' : escapeHtml(String(cv))}</span>
+          </div>`);
+        }
+        case 'audio':
+        case 'video': {
+          const m = mediaAnswers[q.id];
+          const isVid = q.type === 'video';
+          const accept = isVid ? 'video/*' : 'audio/*';
+          const hint = q.media_max_duration_s ? ` (max ${q.media_max_duration_s}s)` : '';
+          const previewTag = m
+            ? (isVid
+                ? `<video src="${m.url}" controls class="mt-2 max-h-48 rounded-lg border border-gray-200"></video>`
+                : `<audio src="${m.url}" controls class="mt-2 w-full"></audio>`)
+            : '';
+          return wrapper(`
+            <input type="file" accept="${accept}" capture
+              onchange="onMediaFile(event, ${q.id}, ${q.media_max_duration_s || 0}, ${isVid ? 'true' : 'false'})"
+              class="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:text-indigo-700">
+            <p class="text-xs text-gray-500 mt-1">${isVid ? 'Vidéo' : 'Audio'} — 8 Mo max${hint}</p>
+            <div id="media-prev-${q.id}">${previewTag}</div>`);
+        }
+        case 'phone': {
+          const phoneVal = typeof v === 'object' && v ? v : { country: q.phone_default_country || '', number: '' };
+          const opts = PHONE_COUNTRIES.map(c =>
+            `<option value="${c.code}" ${phoneVal.country === c.code ? 'selected' : ''}>${c.flag} ${c.dial} ${c.name}</option>`
+          ).join('');
+          return wrapper(`
+            <div class="flex gap-2 items-start">
+              <select id="phone-country-${q.id}" onchange="setPhone(${q.id})"
+                class="px-2 py-2 border border-gray-200 rounded-lg text-sm w-44 shrink-0 focus:ring-2 focus:ring-indigo-500">
+                <option value="">Pays…</option>
+                ${opts}
+              </select>
+              <div class="flex-1">
+                <input type="tel" id="phone-number-${q.id}"
+                  oninput="setPhone(${q.id})"
+                  value="${escapeHtml(phoneVal.number || '')}"
+                  placeholder="Numéro sans indicatif"
+                  class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+                <p id="phone-err-${q.id}" class="text-xs text-red-500 mt-1 hidden">Format invalide pour ce pays.</p>
+              </div>
+            </div>`);
+        }
+        default: return wrapper(`<input type="text" oninput="setAnswer(${q.id}, this.value)" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm">`);
+      }
+    }
+
+    function setAnswer(qid, v) {
+      answers[qid] = v;
+      refreshCalculatedDom();
+      scheduleEvaluate();
+    }
+    function setAnswerSilent(qid, v) { answers[qid] = v; refreshCalculatedDom(); }
+
+    function validateEmail(qid, v) {
+      const err = document.getElementById('email-err-' + qid);
+      if (!err) return true;
+      const valid = !v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      err.classList.toggle('hidden', valid);
+      return valid;
+    }
+    function toggleCheckbox(qid, opt, checked) {
+      const arr = Array.isArray(answers[qid]) ? answers[qid] : [];
+      answers[qid] = checked ? [...arr, opt] : arr.filter(x => x !== opt);
+      refreshCalculatedDom();
+      scheduleEvaluate();
+    }
+    function setGrid(qid, row, col) {
+      const obj = (typeof answers[qid] === 'object' && !Array.isArray(answers[qid])) ? answers[qid] : {};
+      obj[row] = col; answers[qid] = obj;
+      refreshCalculatedDom();
+      scheduleEvaluate();
+    }
+
+    // ── Signature (canvas tactile → PNG data URI) ─────────────────────────────
+    const sigState = {};
+    function sigPadHtml(qid) {
+      return `
+        <div>
+          <canvas id="sig-${qid}" width="600" height="200"
+            onpointerdown="sigStart(event, ${qid})" onpointermove="sigMove(event, ${qid})"
+            onpointerup="sigEnd(${qid})" onpointerleave="sigEnd(${qid})"
+            style="touch-action:none;width:100%;height:170px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:crosshair"></canvas>
+          <button type="button" onclick="sigClear(${qid})" class="mt-2 text-xs text-gray-500 hover:text-red-600">Effacer</button>
+        </div>`;
+    }
+    function sigCtx(qid) {
+      const c = document.getElementById('sig-' + qid);
+      if (!c) return null;
+      const ctx = c.getContext('2d');
+      ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111827';
+      return ctx;
+    }
+    function sigPos(e, qid) {
+      const c = document.getElementById('sig-' + qid);
+      const r = c.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) };
+    }
+    function sigStart(e, qid) {
+      e.preventDefault();
+      const ctx = sigCtx(qid); if (!ctx) return;
+      const p = sigPos(e, qid);
+      sigState[qid] = { drawing: true, dirty: (sigState[qid] && sigState[qid].dirty) || false, x: p.x, y: p.y };
+      try { e.target.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+    function sigMove(e, qid) {
+      const s = sigState[qid]; if (!s || !s.drawing) return;
+      e.preventDefault();
+      const ctx = sigCtx(qid); if (!ctx) return;
+      const p = sigPos(e, qid);
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      s.x = p.x; s.y = p.y; s.dirty = true;
+    }
+    function sigEnd(qid) {
+      const s = sigState[qid]; if (!s || !s.drawing) return;
+      s.drawing = false;
+      if (s.dirty) {
+        const c = document.getElementById('sig-' + qid);
+        answers[qid] = c.toDataURL('image/png');
+        scheduleEvaluate();
+      }
+    }
+    function sigClear(qid) {
+      const c = document.getElementById('sig-' + qid);
+      if (c) c.getContext('2d').clearRect(0, 0, c.width, c.height);
+      sigState[qid] = { drawing: false, dirty: false };
+      answers[qid] = '';
+      scheduleEvaluate();
+    }
+    function sigReset(qid) { answers[qid] = ''; sigState[qid] = { drawing: false, dirty: false }; render(); }
+
+    // ── Listes de choix en cascade (B7) ─────────────────────────────────────
+    function cascadeList(q) {
+      return choiceLists.find(l => Number(l.id) === Number(q.cascade_list_id)) || null;
+    }
+    // Items proposés pour la question q, selon la valeur choisie au niveau parent.
+    function cascadeItemsFor(q) {
+      const list = cascadeList(q);
+      if (!list) return [];
+      const items = list.items || [];
+      if (!q.cascade_parent_question_id) return items.filter(i => i.parent_item_id == null);
+      const parentQ = questions.find(x => Number(x.id) === Number(q.cascade_parent_question_id));
+      if (!parentQ) return [];
+      const parentVal = answers[parentQ.id];
+      if (parentVal == null || parentVal === '') return [];
+      const parentItems = cascadeItemsFor(parentQ);
+      const chosen = parentItems.find(i => i.label === parentVal || i.value === parentVal);
+      if (!chosen) return [];
+      return items.filter(i => Number(i.parent_item_id) === Number(chosen.id));
+    }
+    // Vrai si le niveau parent n'est pas encore répondu.
+    function isCascadeBlocked(q) {
+      if (!q.cascade_parent_question_id) return false;
+      const p = questions.find(x => Number(x.id) === Number(q.cascade_parent_question_id));
+      return !p || answers[p.id] == null || answers[p.id] === '';
+    }
+    function setCascadeAnswer(qid, val) {
+      answers[qid] = val;
+      // Réinitialiser les enfants directs (leur choix n'a plus de sens).
+      questions.forEach(x => {
+        if (Number(x.cascade_parent_question_id) === Number(qid)) answers[x.id] = '';
+      });
+      scheduleEvaluate();
+      render();
+    }
+
+    // ── Audio / vidéo (B5) ─────────────────────────────────────────────────
+    function onMediaFile(e, qid, maxDur, isVideo) {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      if (file.size > 8 * 1024 * 1024) { showToast('Fichier trop lourd (8 Mo max)', 'warning'); return; }
+      const url = URL.createObjectURL(file);
+      const probe = document.createElement(isVideo ? 'video' : 'audio');
+      probe.preload = 'metadata';
+      probe.onloadedmetadata = () => {
+        if (maxDur && probe.duration && probe.duration > maxDur + 0.5) {
+          URL.revokeObjectURL(url);
+          showToast(`Trop long : ${Math.round(probe.duration)}s pour un maximum de ${maxDur}s`, 'warning');
+          return;
+        }
+        const r = new FileReader();
+        r.onload = () => {
+          mediaAnswers[qid] = { dataUri: r.result, mime: file.type || (isVideo ? 'video/mp4' : 'audio/mpeg'), url };
+          answers[qid] = file.name || (isVideo ? 'video' : 'audio');
+          scheduleEvaluate();
+          render();
+        };
+        r.readAsDataURL(file);
+      };
+      probe.onerror = () => { URL.revokeObjectURL(url); showToast('Fichier illisible', 'error'); };
+      probe.src = url;
+    }
+
+    // ── Champs calculés (B6) — évaluation locale ──────────────────────────
+    function calcArith(s) {
+      const toks = String(s).match(/[0-9]*\.?[0-9]+|[()+\-*/]/g);
+      if (!toks) return NaN;
+      const out = [], ops = [], prec = { '+': 1, '-': 1, '*': 2, '/': 2, 'u': 3 };
+      let prev = null;
+      for (const t of toks) {
+        if (/[0-9]/.test(t)) out.push(parseFloat(t));
+        else if (t === '(') ops.push('(');
+        else if (t === ')') {
+          while (ops.length && ops[ops.length - 1] !== '(') out.push(ops.pop());
+          if (!ops.length) return NaN;
+          ops.pop();
+        } else {
+          let op = t;
+          if (t === '-' && (prev === null || prev === '(' || '+-*/'.includes(prev))) op = 'u';
+          while (ops.length && ops[ops.length - 1] !== '(' && prec[ops[ops.length - 1]] >= prec[op]) out.push(ops.pop());
+          ops.push(op);
+        }
+        prev = t;
+      }
+      while (ops.length) { const o = ops.pop(); if (o === '(') return NaN; out.push(o); }
+      const st = [];
+      for (const t of out) {
+        if (typeof t === 'number') st.push(t);
+        else if (t === 'u') st.push(-(st.pop() ?? 0));
+        else { const b = st.pop() ?? 0, a = st.pop() ?? 0; st.push(t === '+' ? a + b : t === '-' ? a - b : t === '*' ? a * b : (b === 0 ? 0 : a / b)); }
+      }
+      return st.length === 1 ? st[0] : NaN;
+    }
+    function calcResolve(expr) {
+      expr = String(expr || '').replace(/age\(\s*\{q(\d+)\}\s*\)/gi, (_, id) => {
+        const d = answers[id];
+        if (!d) return '0';
+        const bd = new Date(d);
+        if (isNaN(bd.getTime())) return '0';
+        const now = new Date();
+        let a = now.getFullYear() - bd.getFullYear();
+        const mo = now.getMonth() - bd.getMonth();
+        if (mo < 0 || (mo === 0 && now.getDate() < bd.getDate())) a--;
+        return String(a);
+      });
+      expr = expr.replace(/\{q(\d+)\}/g, (_, id) => {
+        const v = answers[id];
+        const n = parseFloat(Array.isArray(v) ? v.length : v);
+        return Number.isFinite(n) ? String(n) : '0';
+      });
+      return expr;
+    }
+    function calcEval(rawExpr) {
+      let s = calcResolve(rawExpr);
+      const fnRe = /(round|abs)\(\s*([^()]*)\s*\)/i;
+      let guard = 0;
+      while (fnRe.test(s) && guard++ < 50) {
+        s = s.replace(fnRe, (_, f, inner) => {
+          const x = calcArith(inner);
+          if (!Number.isFinite(x)) return 'NaN';
+          return String(f.toLowerCase() === 'round' ? Math.round(x) : Math.abs(x));
+        });
+      }
+      const r = calcArith(s);
+      return Number.isFinite(r) ? (Math.round(r * 1e6) / 1e6) : null;
+    }
+    function recomputeCalculated() {
+      questions.filter(q => q.type === 'calculated').forEach(q => {
+        const val = calcEval(q.calculated_expression);
+        answers[q.id] = (val === null) ? '' : String(val);
+      });
+    }
+    function refreshCalculatedDom() {
+      recomputeCalculated();
+      questions.filter(q => q.type === 'calculated').forEach(q => {
+        const el = document.getElementById('calc-val-' + q.id);
+        if (el) el.textContent = answers[q.id] === '' ? '—' : answers[q.id];
+      });
+    }
+
+    // Valide une section donnée. Affiche un toast au 1er problème et renvoie false.
+    function validateSectionObj(sec) {
+      const secIndex = sec.index !== undefined ? sec.index : sections.indexOf(sec);
+      const secQ = questions.filter(q => (q.section_index ?? 0) === secIndex);
+
+      // ── B8 : groupes répétables de cette section ──────────────────────────
+      const secGroups = repeatGroups.filter(g => Number(g.section_index) === secIndex);
+      for (const g of secGroups) {
+        const members = secQ.filter(q => Number(q.repeat_group_id) === Number(g.id));
+        const n = repeatCount(g);
+        const isFilled = idx => members.some(m => {
+          const val = answers[`${m.id}#${idx}`];
+          return val != null && val !== '' && !(Array.isArray(val) && !val.length);
+        });
+        const filledCount = Array.from({ length: n }, (_, i) => i).filter(isFilled).length;
+        if ((g.min_repeat || 0) > 0 && filledCount < g.min_repeat) {
+          showToast(`« ${g.label} » : ${g.min_repeat} occurrence(s) minimum`, 'warning'); return false;
+        }
+        for (let idx = 0; idx < n; idx++) {
+          if (!isFilled(idx)) continue;               // occurrence vide → ignorée
+          for (const m of members) {
+            const val = answers[`${m.id}#${idx}`];
+            if (m.required && (val == null || val === '' || (Array.isArray(val) && !val.length))) {
+              showToast(`« ${m.label} » (${g.label} ${idx + 1}) est obligatoire`, 'warning'); return false;
+            }
+          }
+        }
+      }
+
+      for (const q of secQ) {
+        if (q.repeat_group_id) continue;              // géré ci-dessus
+        if (q.required && (answers[q.id] == null || answers[q.id] === '' || (Array.isArray(answers[q.id]) && !answers[q.id].length))) {
+          showToast(`« ${q.label} » est obligatoire`, 'warning'); return false;
+        }
+        // Validation email
+        if (q.type === 'email' && answers[q.id]) {
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(answers[q.id])) {
+            validateEmail(q.id, answers[q.id]);
+            showToast(`« ${q.label} » : adresse email invalide`, 'warning'); return false;
+          }
+        }
+        // Validation spécifique téléphone
+        if (q.type === 'phone' && answers[q.id]) {
+          const { country, number } = answers[q.id];
+          if (country && number) {
+            const c = PHONE_COUNTRIES.find(x => x.code === country);
+            if (c && !c.pattern.test(number.replace(/\s/g, ''))) {
+              showToast(`« ${q.label} » : numéro invalide pour ${c.name}`, 'warning'); return false;
+            }
+          } else if (q.required && (!country || !number)) {
+            showToast(`« ${q.label} » : pays et numéro requis`, 'warning'); return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    // Valide toutes les sections visibles (appelé uniquement à la soumission).
+    // En cas d'échec, saute sur la section fautive.
+    function validateAllVisible() {
+      const visible = getVisibleSections();
+      for (const sec of visible) {
+        if (!validateSectionObj(sec)) {
+          currentSection = sections.indexOf(sec);
+          render();
+          window.scrollTo(0, 0);
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function nextSection() {
+      // Navigation libre : aucune validation ici. On peut avancer même avec
+      // des champs obligatoires vides ; le contrôle se fait à la soumission.
+      // Avancer à la prochaine section VISIBLE
+      const visible = getVisibleSections();
+      const currentSec = sections[currentSection];
+      const visIdx = visible.findIndex(s => s === currentSec);
+      if (visIdx < visible.length - 1) {
+        const nextSec = visible[visIdx + 1];
+        currentSection = sections.indexOf(nextSec);
+        render();
+        window.scrollTo(0, 0);
+      }
+    }
+
+    function prevSection() {
+      // Reculer à la section précédente VISIBLE
+      const visible = getVisibleSections();
+      const currentSec = sections[currentSection];
+      const visIdx = visible.findIndex(s => s === currentSec);
+      if (visIdx > 0) {
+        const prevSec = visible[visIdx - 1];
+        currentSection = sections.indexOf(prevSec);
+        render();
+        window.scrollTo(0, 0);
+      }
+    }
+
+    async function submitForm() {
+      if (!validateAllVisible()) return;
+      recomputeCalculated();
+
+      // Garde-fou serveur : revalide les champs obligatoires côté source de
+      // vérité (POST /forms/{id}/validate), au cas où le formulaire a changé
+      // depuis le chargement de la page (question rendue obligatoire entre
+      // temps, etc.) — la validation client seule ne peut pas le détecter.
+      if (form?.id) {
+        const flatAnswers = {};
+        Object.entries(answers).forEach(([k, v]) => {
+          if (k.indexOf('#') === -1) flatAnswers[k] = v;
+        });
+        const { ok: vOk, data: vData } = await KBF_API.post(`/forms/${form.id}/validate`, { answers: flatAnswers }, false);
+        if (vOk && vData && vData.valid === false && Array.isArray(vData.missing) && vData.missing.length) {
+          showToast(`« ${vData.missing[0].label} » est obligatoire`, 'warning');
+          return;
+        }
+        // Si l'appel échoue (réseau, etc.), on ne bloque pas l'envoi : la
+        // validation client déjà passée reste la référence dans ce cas.
+      }
+
+      let rcToken = '';
+      if (form.require_captcha) {
+        rcToken = (pubRcId !== null && window.grecaptcha) ? grecaptcha.getResponse(pubRcId) : '';
+        if (!rcToken) { showToast('Cochez la case « Je ne suis pas un robot ».', 'warning'); return; }
+      }
+
+      const payload = {
+        form_id: form.id,
+        user_id: null,
+        _hp: (document.getElementById('hp-website')?.value || ''),
+        recaptcha_token: rcToken,
+        answers: Object.entries(answers).reduce((acc, [k, value]) => {
+          const h = k.indexOf('#');
+          if (h === -1) {
+            const a = { question_id: Number(k), value };
+            const m = mediaAnswers[k];
+            if (m) { a.media = m.dataUri; a.media_mime = m.mime; }
+            acc.push(a);
+          } else {
+            // Occurrence d'un groupe répétable — n'envoyer que si renseignée.
+            const empty = value == null || value === '' || (Array.isArray(value) && !value.length);
+            if (!empty) {
+              acc.push({ question_id: Number(k.slice(0, h)), value, repeat_index: Number(k.slice(h + 1)) });
+            }
+          }
+          return acc;
+        }, [])
+      };
+      const { ok, data } = await KBF_API.post('/responses', payload, false);
+      if (!ok && data?.error) { showToast(data.error, 'error'); if (pubRcId !== null && window.grecaptcha) grecaptcha.reset(pubRcId); return; }
+      if (ok) {
+        if (window.confetti) confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+        document.getElementById('card').innerHTML = `
+          <div class="text-center py-10 animate-fade-in">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center">${kbIcon('check', 'w-8 h-8')}</div>
+            <h2 class="text-2xl font-bold mb-2" style="font-family:'Plus Jakarta Sans'">Merci !</h2>
+            <p class="text-gray-600">${escapeHtml(form.confirmation_message || 'Votre réponse a bien été enregistrée.')}</p>
+          </div>`;
+      } else showToast(data?.error || 'Erreur d\'envoi', 'error');
+    }
+  </script>
+</body>
+</html>

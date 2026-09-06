@@ -1,0 +1,25 @@
+<?php
+/**
+ * CAPTCHA (Google reCAPTCHA v2 — case « Je ne suis pas un robot »).
+ * Protège la connexion et l'inscription.
+ *
+ * 1. https://www.google.com/recaptcha/admin/create
+ *    - Type : reCAPTCHA v2 → « Je ne suis pas un robot » (case à cocher)
+ *    - Domaines : localhost   (+ l'IP LAN, ex. 192.168.1.32, si tu testes
+ *      la connexion/inscription depuis un téléphone)
+ * 2. Copie la « Clé de site » et la « Clé secrète » ci-dessous.
+ * 3. Copie ce fichier en `recaptcha.php` (gitignoré).
+ *
+ * Tant que les clés sont vides / factices, le CAPTCHA est simplement inactif
+ * (la connexion et l'inscription fonctionnent normalement).
+ *
+ * ── Clés de TEST universelles de Google (widget qui valide toujours) ──
+ * Pratiques pour le dev / les tests automatisés :
+ *   site_key   = 6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MUd7dgn
+ *   secret_key = 6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe
+ */
+
+return [
+    'site_key'   => '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MUd7dgn',
+    'secret_key' => '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe',
+];

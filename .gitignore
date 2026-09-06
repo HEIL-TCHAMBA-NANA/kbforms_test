@@ -1,0 +1,15 @@
+*.zip
+app/config/dev-mode
+app/config/mail.php
+app/config/app.php
+app/config/google.php
+app/config/google-sheets.php
+app/config/kbforms-sheets-key.json
+app/config/recaptcha.php
+app/config/mobile.php
+app/config/fcm.php
+app/config/kbforms-fcm-key.json
+app/config/*.bak*
+app/logs/*.log
+logs/*.log
+app/config/database.php

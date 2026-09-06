@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paramètres · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-5xl w-full mx-auto animate-fade-in">
+
+      <div class="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-6">
+
+        <!-- Nav latérale -->
+        <nav class="bg-white border border-gray-200 rounded-2xl p-2 h-fit sticky top-6">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest px-3 py-2">Compte</p>
+          <button onclick="switchSec('profile')"  id="s-profile"  class="nav-btn active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-6.8 7-6.8s7 2.9 7 6.8"/></svg>Profil</button>
+          <button onclick="switchSec('security')" id="s-security" class="nav-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Sécurité</button>
+          <button onclick="switchSec('notifs')"   id="s-notifs"   class="nav-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2H4.5L6 16Z"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>Notifications</button>
+          <hr class="my-1 border-gray-100" />
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest px-3 py-2">Avancé</p>
+          <button onclick="switchSec('data')"     id="s-data"     class="nav-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5v-9Z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/></svg>Mes données</button>
+          <button onclick="switchSec('danger')"   id="s-danger"   class="nav-btn danger-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5 21 19.5H3L12 4.5Z"/><path d="M12 10v4M12 17h.01"/></svg>Zone danger</button>
+        </nav>
+
+        <!-- Contenu -->
+        <section id="sec-content" class="bg-white border border-gray-200 rounded-2xl p-6 min-h-[400px]">
+          <div class="kb-skeleton h-64"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <style>
+    .nav-btn { display:flex;align-items:center;gap:.55rem;width:100%;text-align:left;padding:.5rem .75rem;border-radius:.5rem;font-size:.875rem;color:#4b5563;transition:background .15s,color .15s; }
+    .nav-btn svg { flex-shrink:0;width:1rem;height:1rem; }
+    .nav-btn:hover { background:#f9fafb; }
+    .nav-btn.active { background:#eef2ff;color:#4338ca;font-weight:600; }
+    .nav-btn.danger-btn { color:#dc2626; }
+    .nav-btn.danger-btn:hover { background:#fef2f2; }
+    .nav-btn.danger-btn.active { background:#fee2e2;color:#b91c1c;font-weight:600; }
+    .field label { display:block;font-size:.875rem;font-weight:500;margin-bottom:.3rem;color:#374151; }
+  </style>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    let currentSec = 'profile';
+
+    if (KBF_AUTH.requireAuth()) {
+      renderSidebar('settings');
+      renderTopBar({ title: 'Paramètres' });
+      switchSec('profile');
+      // Rafraîchir le profil si auth.js le charge en arrière-plan
+      window.addEventListener('kbf:profile-loaded', () => {
+        if (currentSec === 'profile') renderProfile();
+      });
+    }
+
+    function switchSec(s) {
+      currentSec = s;
+      ['profile','security','notifs','data','danger'].forEach(k =>
+        document.getElementById('s-' + k)?.classList.remove('active'));
+      document.getElementById('s-' + s)?.classList.add('active');
+      ({ profile:renderProfile, security:renderSecurity, notifs:renderNotifs, data:renderData, danger:renderDanger }[s] || renderProfile)();
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+    function getFullName(u) {
+      return [u.first_name, u.last_name].filter(Boolean).join(' ') || u.name || '';
+    }
+
+    function getBadge(type) {
+      if (type === 'admin')      return { cls: 'kb-badge-red',    label: kbIcon('shield', 'w-3 h-3') + 'Administrateur' };
+      if (type === 'enterprise') return { cls: 'kb-badge-indigo', label: kbIcon('building', 'w-3 h-3') + 'Entreprise' };
+      return                            { cls: 'kb-badge-grey',   label: kbIcon('user', 'w-3 h-3') + 'Particulier' };
+    }
+
+    // ── Profil ─────────────────────────────────────────────────────────────────
+    function renderProfile() {
+      const u        = KBF_AUTH.getUser() || {};
+      const fullName = getFullName(u);
+      const badge    = getBadge(u.account_type);
+      const isEnt    = u.account_type === 'enterprise';
+      const isAdmin  = u.account_type === 'admin';
+
+      document.getElementById('sec-content').innerHTML = `
+        <h2 class="font-semibold text-lg mb-5">Profil</h2>
+
+        <div class="flex items-center gap-4 mb-6">
+          <div class="w-16 h-16 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-2xl font-bold select-none">
+            ${initials(fullName || u.email || '?')}
+          </div>
+          <div>
+            <p class="text-sm font-medium text-gray-800">${escapeHtml(fullName || '—')}</p>
+            <p class="text-xs text-gray-400">${escapeHtml(u.email || '')}</p>
+            <span class="kb-badge ${badge.cls} mt-1">${badge.label}</span>
+          </div>
+        </div>
+
+        <div class="space-y-4 max-w-md">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="field"><label>Prénom</label>
+              <input id="p-firstname" class="kb-input" value="${escapeHtml(u.first_name || '')}">
+            </div>
+            <div class="field"><label>Nom</label>
+              <input id="p-lastname" class="kb-input" value="${escapeHtml(u.last_name || '')}">
+            </div>
+          </div>
+          <div class="field"><label>Email</label>
+            <input id="p-email" type="email" class="kb-input"
+              value="${escapeHtml(u.email || '')}"
+              ${isAdmin ? 'disabled title="Non modifiable pour un compte admin"' : ''}>
+          </div>
+
+          ${isEnt ? `
+          <hr class="border-gray-100">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Informations entreprise</p>
+          <div class="field"><label>Organisation</label>
+            <input id="p-org" class="kb-input" value="${escapeHtml(u.organization || '')}">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="field"><label>Secteur</label>
+              <input id="p-industry" class="kb-input" value="${escapeHtml(u.industry || '')}">
+            </div>
+            <div class="field"><label>Taille</label>
+              <select id="p-size" class="kb-input">
+                ${['1–10','11–50','51–200','201–500','500+'].map(s =>
+                  `<option ${u.company_size===s?'selected':''}>${s}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="field"><label>Pays</label>
+              <input id="p-country" class="kb-input" value="${escapeHtml(u.country||'')}">
+            </div>
+            <div class="field"><label>Poste</label>
+              <input id="p-jobtitle" class="kb-input" value="${escapeHtml(u.job_title||'')}">
+            </div>
+          </div>
+          <div class="field"><label>Site web</label>
+            <input id="p-website" type="url" class="kb-input" value="${escapeHtml(u.website||'')}">
+          </div>
+          <div class="field"><label>Téléphone</label>
+            <input id="p-phone" class="kb-input" value="${escapeHtml(u.phone||'')}">
+          </div>` : ''}
+
+          <button onclick="saveProfile()" class="kb-btn kb-btn-primary">
+            Enregistrer les modifications
+          </button>
+        </div>`;
+    }
+
+    async function saveProfile() {
+      const u = KBF_AUTH.getUser();
+      const body = {
+        first_name: document.getElementById('p-firstname').value.trim(),
+        last_name:  document.getElementById('p-lastname').value.trim(),
+        email:      document.getElementById('p-email')?.value.trim() || u.email,
+      };
+      if (u.account_type === 'enterprise') {
+        body.organization = document.getElementById('p-org')?.value.trim();
+        body.industry     = document.getElementById('p-industry')?.value.trim();
+        body.company_size = document.getElementById('p-size')?.value;
+        body.country      = document.getElementById('p-country')?.value.trim();
+        body.job_title    = document.getElementById('p-jobtitle')?.value.trim();
+        body.website      = document.getElementById('p-website')?.value.trim();
+        body.phone        = document.getElementById('p-phone')?.value.trim();
+      }
+      const { ok, data } = await KBF_API.put(`/users/${u.id}`, body);
+      if (ok) {
+        const updated = { ...u, ...body, name: [body.first_name, body.last_name].filter(Boolean).join(' ') };
+        localStorage.setItem('kbf_user', JSON.stringify(updated));
+        showToast('Profil mis à jour');
+        renderProfile();
+      } else {
+        showToast(data?.error || 'Erreur lors de la sauvegarde', 'error');
+      }
+    }
+
+    // ── Sécurité ───────────────────────────────────────────────────────────────
+    function renderSecurity() {
+      document.getElementById('sec-content').innerHTML = `
+        <h2 class="font-semibold text-lg mb-5">Sécurité</h2>
+        <div class="space-y-4 max-w-md">
+          <div class="kb-alert kb-alert-info mb-2 flex items-center gap-2">${kbIcon('lock-key','w-4 h-4 shrink-0')}<span>Le mot de passe doit contenir au moins 8 caractères.</span></div>
+          <div class="field"><label>Ancien mot de passe</label>
+            <input id="p-old" type="password" class="kb-input" placeholder="••••••••">
+          </div>
+          <div class="field"><label>Nouveau mot de passe</label>
+            <input id="p-new" type="password" class="kb-input" placeholder="••••••••" oninput="checkStrength()">
+            <div class="mt-1 h-1 rounded-full bg-gray-100 overflow-hidden">
+              <div id="strength-fill" class="h-full rounded-full transition-all duration-300" style="width:0%"></div>
+            </div>
+            <p id="strength-label" class="text-xs text-gray-400 mt-1"></p>
+          </div>
+          <div class="field"><label>Confirmer le nouveau mot de passe</label>
+            <input id="p-new2" type="password" class="kb-input" placeholder="••••••••">
+          </div>
+          <button onclick="savePassword()" class="kb-btn kb-btn-primary">Mettre à jour le mot de passe</button>
+        </div>`;
+    }
+
+    function checkStrength() {
+      const val = document.getElementById('p-new').value;
+      let score = 0;
+      if (val.length >= 8)          score++;
+      if (/[A-Z]/.test(val))        score++;
+      if (/[0-9]/.test(val))        score++;
+      if (/[^A-Za-z0-9]/.test(val)) score++;
+      const map = [
+        { w:'0%',  color:'',        text:'' },
+        { w:'25%', color:'#ef4444', text:'Faible' },
+        { w:'50%', color:'#f59e0b', text:'Moyen' },
+        { w:'75%', color:'#6366f1', text:'Fort' },
+        { w:'100%',color:'#10b981', text:'Très fort' },
+      ];
+      const s = map[score];
+      document.getElementById('strength-fill').style.cssText = `width:${s.w};background:${s.color}`;
+      const lbl = document.getElementById('strength-label');
+      lbl.textContent = s.text; lbl.style.color = s.color;
+    }
+
+    async function savePassword() {
+      const u = KBF_AUTH.getUser();
+      const oldP  = document.getElementById('p-old').value;
+      const newP  = document.getElementById('p-new').value;
+      const newP2 = document.getElementById('p-new2').value;
+      if (!oldP)           return showToast('Saisissez votre ancien mot de passe', 'warning');
+      if (newP.length < 8) return showToast('Au moins 8 caractères requis', 'warning');
+      if (newP !== newP2)  return showToast('Les mots de passe ne correspondent pas', 'warning');
+      const { ok, data } = await KBF_API.put(`/users/${u.id}`, { current_password: oldP, new_password: newP });
+      showToast(ok ? 'Mot de passe modifié' : (data?.error || 'Erreur'), ok ? 'success' : 'error');
+      if (ok) {
+        ['p-old','p-new','p-new2'].forEach(id => document.getElementById(id).value = '');
+        checkStrength();
+      }
+    }
+
+    // ── Notifications ──────────────────────────────────────────────────────────
+    function renderNotifs() {
+      document.getElementById('sec-content').innerHTML = `
+        <h2 class="font-semibold text-lg mb-5">Notifications</h2>
+        <div class="kb-alert kb-alert-info mb-5">Ces préférences sont stockées localement sur cet appareil.</div>
+        <div class="space-y-1 max-w-md">
+          ${[
+            { id:'n-response', label:'Nouvelle réponse reçue',       desc:'Notification à chaque soumission' },
+            { id:'n-publish',  label:'Formulaire publié',             desc:'Confirmation lors de la publication' },
+            { id:'n-collab',   label:'Nouveau collaborateur ajouté',  desc:'Alerte lors d\'un partage' },
+            { id:'n-webhook',  label:'Échec de webhook',              desc:'Prévenu si un webhook échoue 3 fois' },
+          ].map(n => `
+            <div class="flex items-start justify-between gap-4 py-3 border-b border-gray-100">
+              <div>
+                <p class="text-sm font-medium text-gray-800">${n.label}</p>
+                <p class="text-xs text-gray-400">${n.desc}</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer mt-0.5 shrink-0">
+                <input type="checkbox" class="sr-only peer" ${loadNotifPref(n.id)?'checked':''}
+                  onchange="saveNotifPref('${n.id}', this.checked)">
+                <div class="w-10 h-5 bg-gray-200 rounded-full peer peer-checked:bg-indigo-500
+                  after:content-[''] after:absolute after:top-0.5 after:left-0.5
+                  after:bg-white after:rounded-full after:h-4 after:w-4
+                  after:transition-all peer-checked:after:translate-x-5"></div>
+              </label>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    function loadNotifPref(k) { try { return JSON.parse(localStorage.getItem('kbf_notif_'+k)?? 'true'); } catch { return true; } }
+    function saveNotifPref(k, v) { try { localStorage.setItem('kbf_notif_'+k, JSON.stringify(v)); showToast('Préférence enregistrée'); } catch {} }
+
+    // ── Mes données ────────────────────────────────────────────────────────────
+    function renderData() {
+      document.getElementById('sec-content').innerHTML = `
+        <h2 class="font-semibold text-lg mb-5">Mes données</h2>
+        <div class="space-y-4 max-w-xl">
+          <div class="kb-card">
+            <h3 class="font-semibold text-sm mb-1">Exporter mes formulaires</h3>
+            <p class="text-xs text-gray-500 mb-3">Téléchargez tous vos formulaires au format JSON.</p>
+            <button onclick="exportData()" class="kb-btn kb-btn-secondary kb-btn-sm gap-1.5">${kbIcon('download','w-4 h-4')} Exporter en JSON</button>
+          </div>
+          <div class="kb-card">
+            <h3 class="font-semibold text-sm mb-1">Informations de session</h3>
+            <div class="text-xs text-gray-600 font-mono bg-gray-50 px-3 py-2 rounded-lg" id="session-info">Chargement…</div>
+          </div>
+        </div>`;
+
+      try {
+        const payload = KBF_AUTH.decodeJWT(KBF_AUTH.getToken());
+        const exp = new Date(payload.exp * 1000);
+        const iat = new Date((payload.iat || 0) * 1000);
+        document.getElementById('session-info').innerHTML =
+          `Connecté le : <b>${iat.toLocaleString('fr-FR')}</b><br>
+           Expire le   : <b>${exp.toLocaleString('fr-FR')}</b><br>
+           Email       : <b>${payload.email || '—'}</b><br>
+           Rôle        : <b>${payload.account_type || '—'}</b>`;
+      } catch {
+        document.getElementById('session-info').textContent = 'Information non disponible';
+      }
+    }
+
+    async function exportData() {
+      const u = KBF_AUTH.getUser();
+      const { ok, data } = await KBF_API.get(`/users/${u.id}/forms`);
+      if (!ok) return showToast('Erreur lors de l\'export', 'error');
+      const forms = Array.isArray(data) ? data : (data?.forms || []);
+      const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), forms }, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `kbforms-export-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+      showToast('Export téléchargé');
+    }
+
+    // ── Zone danger ────────────────────────────────────────────────────────────
+    function renderDanger() {
+      document.getElementById('sec-content').innerHTML = `
+        <h2 class="font-semibold text-lg mb-5 text-red-700">Zone danger</h2>
+        <div class="max-w-xl">
+          <div class="kb-card border-red-200 bg-red-50">
+            <h3 class="font-semibold text-red-800 mb-1">Supprimer mon compte</h3>
+            <p class="text-sm text-red-700 mb-4">
+              Cette action est <strong>irréversible</strong>. Tous vos formulaires, réponses et données associées seront définitivement supprimés.
+            </p>
+            <div class="space-y-3">
+              <div class="field">
+                <label class="text-red-700">Tapez <strong>SUPPRIMER</strong> pour confirmer</label>
+                <input id="danger-confirm" class="kb-input border-red-300" placeholder="SUPPRIMER">
+              </div>
+              <button onclick="deleteAccount()" class="kb-btn kb-btn-danger gap-1.5">
+                ${kbIcon('trash','w-4 h-4')} Supprimer définitivement mon compte
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    async function deleteAccount() {
+      if (document.getElementById('danger-confirm')?.value !== 'SUPPRIMER')
+        return showToast('Tapez SUPPRIMER pour confirmer', 'warning');
+      const u = KBF_AUTH.getUser();
+      const { ok, data } = await KBF_API.delete(`/users/${u.id}`);
+      if (ok) {
+        KBF_AUTH.clear();
+        showToast('Compte supprimé. Au revoir.', 'info');
+        setTimeout(() => window.location.href = '/login', 1500);
+      } else {
+        showToast(data?.error || 'Erreur lors de la suppression', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

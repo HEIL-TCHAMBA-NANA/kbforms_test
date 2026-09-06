@@ -1,0 +1,11 @@
+.git
+.gitignore
+*.md
+tools/
+migrations/
+kbforms.sql
+*.zip
+app/logs/*.log
+logs/*.log
+app/config/*.bak*
+app/config/dev-mode

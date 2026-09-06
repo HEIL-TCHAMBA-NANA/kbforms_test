@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connexion · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ---- Scène / arrière-plan ---------------------------------------------- */
+    .auth-stage{
+      background-color:#131028;
+      background-image:
+        radial-gradient(58rem 58rem at 6% -4%,  rgba(99,102,241,.42), transparent 60%),
+        radial-gradient(46rem 46rem at 104% 8%, rgba(192,38,211,.24), transparent 58%),
+        radial-gradient(62rem 62rem at 96% 108%, rgba(124,58,237,.44), transparent 60%),
+        radial-gradient(42rem 42rem at -8% 112%, rgba(56,48,163,.40), transparent 60%);
+    }
+    .auth-noise{
+      opacity:.035;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ---- Carte ------------------------------------------------------------- */
+    .auth-card{
+      box-shadow:
+        0 1px 2px rgba(15,23,42,.06),
+        0 18px 40px -12px rgba(15,23,42,.30),
+        0 0 0 1px rgba(15,23,42,.04);
+    }
+    @keyframes kbRise{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
+    .kb-rise{animation:kbRise .55s cubic-bezier(.2,.7,.2,1) both}
+
+    /* ---- Bascule Connexion / Inscription ---------------------------------- */
+    #auth-panels{position:relative;transition:height .32s cubic-bezier(.2,.7,.2,1)}
+    #auth-panels[data-anim="1"]{overflow:hidden}
+    #auth-panels.is-sizing{overflow:hidden}
+    .auth-panel{transition:opacity .2s ease, transform .2s ease}
+    .auth-panel.is-leaving{opacity:0;transform:translateY(6px)}
+    .auth-panel.is-entering{opacity:0;transform:translateY(-6px)}
+    @media (prefers-reduced-motion:reduce){
+      .kb-rise{animation:none}
+      #auth-panels{transition:none}
+      .auth-panel{transition:none}
+    }
+
+    /* ---- Champs ---------------------------------------------------------------- */
+    .fld{
+      width:100%;height:2.75rem;padding:0 .875rem;border:1px solid #e5e7eb;border-radius:.75rem;
+      background:#f9fafb;font-size:.875rem;color:#111827;transition:border-color .15s, box-shadow .15s, background .15s;
+    }
+    .fld::placeholder{color:#9ca3af}
+    .fld:focus{outline:none;background:#fff;border-color:#6366f1;box-shadow:0 0 0 4px rgba(99,102,241,.12)}
+    select.fld{
+      appearance:none;padding-right:2.25rem;cursor:pointer;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right .8rem center;
+    }
+
+    /* ---- Bouton principal ---------------------------------------------------- */
+    .btn-primary{
+      width:100%;height:2.75rem;border-radius:.75rem;background:#4f46e5;color:#fff;font-weight:600;font-size:.875rem;
+      display:flex;align-items:center;justify-content:center;gap:.5rem;
+      box-shadow:0 12px 24px -8px rgba(79,70,229,.5);transition:background .15s, transform .06s;
+    }
+    .btn-primary:hover{background:#4338ca}
+    .btn-primary:active{transform:translateY(1px)}
+    .btn-primary:disabled{opacity:.65;cursor:not-allowed;box-shadow:none}
+
+    /* ---- Assistant d'inscription (multi-étapes) -------------------------- */
+    .role-card{display:flex;align-items:center;gap:.85rem;padding:1rem;border:1px solid #e5e7eb;border-radius:1rem;background:#fff;text-align:left;transition:border-color .16s, background .16s, box-shadow .16s}
+    .role-card:hover{border-color:#c7cbf5;background:#fafaff}
+    .role-card.selected{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 3px rgba(99,102,241,.13)}
+    .role-check{width:1.15rem;height:1.15rem;margin-left:auto;color:#6366f1;opacity:0;transition:opacity .15s;flex-shrink:0}
+    .role-card.selected .role-check{opacity:1}
+
+    #reg-steps{position:relative;transition:height .32s cubic-bezier(.2,.7,.2,1)}
+    #reg-steps[data-anim="1"]{overflow:hidden}
+    .reg-step{transition:opacity .2s ease, transform .24s cubic-bezier(.2,.7,.2,1)}
+    .reg-step.is-leaving{opacity:0;transform:translateX(-18px)}
+    .reg-step.is-entering{opacity:0;transform:translateX(18px)}
+    .reg-step.is-back-leaving{opacity:0;transform:translateX(18px)}
+    .reg-step.is-back-entering{opacity:0;transform:translateX(-18px)}
+    @media (prefers-reduced-motion:reduce){#reg-steps{transition:none}.reg-step{transition:none}}
+  </style>
+</head>
+<body class="auth-stage min-h-screen text-gray-900">
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- Texture + signature de marque en filigrane -->
+  <div class="fixed inset-0 auth-noise pointer-events-none"></div>
+  <div class="fixed inset-0 overflow-hidden pointer-events-none">
+    <svg class="absolute -right-[10%] -bottom-[20%] w-[40rem] max-w-[78vw] text-white opacity-[0.035]" style="transform:rotate(-8deg)" viewBox="0 0 40 40" fill="none">
+      <g stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 10.5v19"/><path d="M8 20 15.5 12.4"/><path d="M8 20 16.3 29.5"/>
+        <path d="M22.5 10.5v19"/><path d="M22.5 10.5h4.4a4.4 4.4 0 0 1 0 8.8H22.5"/><path d="M22.5 19.3h5.1a4.9 4.9 0 0 1 0 9.8H22.5"/>
+      </g>
+      <circle cx="17.2" cy="10.6" r="2.4" fill="currentColor"/>
+    </svg>
+  </div>
+
+  <main class="relative min-h-screen flex items-center justify-center p-4 sm:p-6">
+    <div class="w-full max-w-[460px] kb-rise">
+
+      <div class="relative">
+        <!-- halo coloré sous la carte -->
+        <div class="absolute -inset-5 rounded-[30px] bg-indigo-500/25 blur-2xl"></div>
+
+        <div class="relative bg-white rounded-[20px] auth-card overflow-hidden">
+          <!-- barre navigateur -->
+          <div class="flex items-center h-10 px-4 bg-[#F7F7F9] border-b border-gray-200/80">
+            <div class="flex gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full" style="background:#FF5F57"></span>
+              <span class="w-2.5 h-2.5 rounded-full" style="background:#FEBC2E"></span>
+              <span class="w-2.5 h-2.5 rounded-full" style="background:#28C840"></span>
+            </div>
+            <div class="mx-auto flex items-center gap-1.5 text-[11px] text-gray-400 bg-white border border-gray-200 rounded-md px-2.5 py-0.5">
+              <svg viewBox="0 0 24 24" fill="currentColor" class="w-2.5 h-2.5"><path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5Zm3 8H9V6a3 3 0 0 1 6 0v3Z"/></svg>
+              kbforms.local
+            </div>
+          </div>
+
+          <div class="px-7 py-8 sm:px-10 sm:py-10 max-h-[calc(100vh-6rem)] overflow-y-auto" style="scrollbar-width:thin">
+
+            <div class="flex items-center justify-center gap-2 mb-7">
+              <img src="/assets/images/kbforms-mark.svg" alt="" class="w-9 h-9">
+              <span class="text-[19px] font-extrabold tracking-tight" style="font-family:'Plus Jakarta Sans'">KBForms</span>
+            </div>
+
+            <div class="flex justify-center mb-7">
+              <div class="inline-flex bg-gray-100 rounded-xl p-1 gap-1" role="tablist">
+                <button id="tab-login" class="px-5 py-2 text-sm font-semibold rounded-lg bg-white text-gray-900 shadow-sm transition" onclick="switchTab('login')">Connexion</button>
+                <button id="tab-register" class="px-5 py-2 text-sm font-semibold rounded-lg text-gray-500 hover:text-gray-800 transition" onclick="switchTab('register')">Inscription</button>
+              </div>
+            </div>
+
+            <div id="auth-panels">
+            <!-- LOGIN -->
+            <form id="form-login" class="auth-panel" onsubmit="return doLogin(event)">
+              <div class="text-center mb-6">
+                <h1 class="text-[22px] font-bold tracking-tight inline-flex items-center gap-2" style="font-family:'Plus Jakarta Sans'">
+                  Bon retour
+                  <svg class="w-5 h-5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11.5V6a1.5 1.5 0 0 1 3 0v4.5"/><path d="M11 10.5V4.5a1.5 1.5 0 0 1 3 0v6"/><path d="M14 11V6.5a1.5 1.5 0 0 1 3 0V13"/><path d="M17 9a1.5 1.5 0 0 1 3 0v4.5c0 3.6-2.7 7-6.8 7-2.5 0-4.6-1.1-6-3l-2.4-3.6a1.55 1.55 0 0 1 2.5-1.9L11 14"/></svg>
+                </h1>
+                <p class="text-sm text-gray-500 mt-1">Connectez-vous à votre espace KBForms</p>
+              </div>
+              <div class="space-y-4">
+                <div>
+                  <label for="login-email" class="block text-[13px] font-medium text-gray-700 mb-1.5">Email</label>
+                  <input id="login-email" type="email" required autocomplete="email" placeholder="vous@exemple.com" class="fld" />
+                </div>
+                <div>
+                  <label for="login-password" class="block text-[13px] font-medium text-gray-700 mb-1.5">Mot de passe</label>
+                  <div class="relative">
+                    <input id="login-password" type="password" required placeholder="••••••••" class="fld pr-11" />
+                    <button type="button" onclick="togglePwd('login-password')" aria-label="Afficher le mot de passe" class="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M2.5 12S5.5 5.5 12 5.5 21.5 12 21.5 12 18.5 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="text-right -mt-1">
+                  <button type="button" onclick="switchTab('forgot')" class="text-[13px] text-indigo-600 font-medium hover:text-indigo-700">Mot de passe oublié ?</button>
+                </div>
+                <p id="login-error" class="text-[13px] font-medium text-red-600 hidden"></p>
+                <div id="recaptcha-login" class="hidden mb-3"></div>
+                <button type="submit" id="login-btn" class="btn-primary">
+                  <svg id="login-spinner" class="hidden w-4 h-4 animate-spin-kb" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 4v3M12 17v3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M2 12h3M19 12h3"/></svg>
+                  <span>Se connecter</span>
+                </button>
+
+                <div id="google-auth" class="hidden">
+                  <div class="flex items-center gap-3 my-4">
+                    <span class="h-px flex-1 bg-gray-200"></span>
+                    <span class="text-xs text-gray-400">ou</span>
+                    <span class="h-px flex-1 bg-gray-200"></span>
+                  </div>
+                  <a id="google-auth-link" href="/auth/google" class="w-full h-11 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 flex items-center justify-center gap-2.5 text-sm font-medium text-gray-700 transition">
+                    <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" aria-hidden="true">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.56c2.08-1.92 3.28-4.74 3.28-8.09Z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.76c-.98.66-2.24 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"/>
+                      <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84Z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z"/>
+                    </svg>
+                    Continuer avec Google
+                  </a>
+                  <p class="text-[11px] text-gray-400 text-center mt-2">Un compte est créé automatiquement à la première connexion.</p>
+                </div>
+              </div>
+              <p class="text-sm text-gray-500 text-center mt-5">Pas encore de compte ? <button type="button" onclick="switchTab('register')" class="text-indigo-600 font-semibold hover:text-indigo-700">Créer un compte</button></p>
+            </form>
+
+            <!-- REGISTER — assistant multi-étapes -->
+            <div id="form-register" class="auth-panel hidden">
+              <form id="reg-form" novalidate onsubmit="return regSubmit(event)">
+
+                <div id="reg-progress" class="mb-6 hidden">
+                  <div class="flex items-center justify-between mb-2">
+                    <span id="reg-step-label" class="text-[12px] font-medium text-gray-400"></span>
+                    <button type="button" onclick="switchTab('login')" class="text-[12px] text-gray-400 hover:text-gray-600">Annuler</button>
+                  </div>
+                  <div id="reg-bars" class="flex gap-1.5"></div>
+                </div>
+
+                <div id="reg-steps">
+
+                  <!-- Étape : type de compte -->
+                  <section data-step="type" class="reg-step">
+                    <div class="text-center mb-5">
+                      <h2 class="text-[22px] font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Créer un compte</h2>
+                      <p class="text-sm text-gray-500 mt-1">Pour commencer, choisissez votre profil</p>
+                    </div>
+                    <div class="space-y-3">
+                      <button type="button" data-role="individual" onclick="regSetRole('individual')" class="role-card w-full">
+                        <span class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-6.8 7-6.8s7 2.9 7 6.8"/></svg>
+                        </span>
+                        <span class="min-w-0">
+                          <span class="block text-sm font-semibold text-gray-900">Particulier</span>
+                          <span class="block text-xs text-gray-500">Usage personnel ou freelance</span>
+                          <span class="block text-[11px] text-gray-400 mt-1">Formulaires, réponses, analytics, modèles &amp; export illimités · 1 collaborateur par formulaire</span>
+                        </span>
+                        <svg class="role-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                      </button>
+                      <button type="button" data-role="enterprise" onclick="regSetRole('enterprise')" class="role-card w-full">
+                        <span class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5.5A1.5 1.5 0 0 1 5.5 4h7A1.5 1.5 0 0 1 14 5.5V21"/><path d="M14 9.5h4.5A1.5 1.5 0 0 1 20 11v10"/><path d="M3 21h18"/><path d="M7 8h4M7 12h4M7 16h4M17 13h.01M17 17h.01"/></svg>
+                        </span>
+                        <span class="min-w-0">
+                          <span class="block text-sm font-semibold text-gray-900">Entreprise</span>
+                          <span class="block text-xs text-gray-500">Équipe, PME ou grande structure</span>
+                          <span class="block text-[11px] text-gray-400 mt-1">Tout le plan Particulier · collaborateurs illimités · rôles &amp; permissions · annuaire de l'organisation</span>
+                        </span>
+                        <svg class="role-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                      </button>
+                    </div>
+                  </section>
+
+                  <!-- Particulier · 1 -->
+                  <section data-step="ind-identity" class="reg-step hidden">
+                    <div class="text-center mb-5">
+                      <h2 class="text-lg font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Vos informations</h2>
+                      <p class="text-sm text-gray-500 mt-1">Comment devons-nous vous appeler&nbsp;?</p>
+                    </div>
+                    <div class="space-y-4">
+                      <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Prénom <span class="text-red-500">*</span></label><input id="ind-first" type="text" placeholder="Jean" class="fld" /></div>
+                        <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Nom <span class="text-red-500">*</span></label><input id="ind-last" type="text" placeholder="Dupont" class="fld" /></div>
+                      </div>
+                      <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Pays</label><select id="ind-country" class="fld"><option value="">— Sélectionnez —</option></select></div>
+                    </div>
+                  </section>
+
+                  <!-- Particulier · 2 -->
+                  <section data-step="ind-account" class="reg-step hidden">
+                    <div class="text-center mb-5">
+                      <h2 class="text-lg font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Vos identifiants</h2>
+                      <p class="text-sm text-gray-500 mt-1">Pour vous connecter à KBForms</p>
+                    </div>
+                    <div class="space-y-4">
+                      <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Email <span class="text-red-500">*</span></label><input id="ind-email" type="email" placeholder="jean@exemple.com" class="fld" /></div>
+                      <div>
+                        <label class="block text-[13px] font-medium text-gray-700 mb-1.5">Mot de passe <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                          <input id="ind-password" type="password" placeholder="••••••••" class="fld pr-11" />
+                          <button type="button" onclick="togglePwd('ind-password')" aria-label="Afficher le mot de passe" class="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M2.5 12S5.5 5.5 12 5.5 21.5 12 21.5 12 18.5 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1.5">Minimum 8 caractères</p>
+                      </div>
+                      <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Confirmer <span class="text-red-500">*</span></label><input id="ind-password2" type="password" placeholder="••••••••" class="fld" /></div>
+                    </div>
+                  </section>
+
+                  <!-- Entreprise · 1 -->
+                  <section data-step="ent-company" class="reg-step hidden">
+                    <div class="text-center mb-5">
+                      <h2 class="text-lg font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Votre entreprise</h2>
+                      <p class="text-sm text-gray-500 mt-1">Quelques informations sur la structure</p>
+                    </div>
+                    <div class="space-y-4">
+                      <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Nom de l'entreprise <span class="text-red-500">*</span></label><input id="ent-org" type="text" placeholder="KBForms SARL" class="fld" /></div>
+                      <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Secteur</label>
+                          <select id="ent-industry" class="fld">
+                            <option value="">— Sélectionnez —</option>
+                            <option value="tech">Technologie / SaaS</option>
+                            <option value="finance">Finance / Banque</option>
+                            <option value="health">Santé / Médical</option>
+                            <option value="education">Éducation</option>
+                            <option value="retail">Commerce / Retail</option>
+                            <option value="consulting">Conseil / Audit</option>
+                            <option value="ngo">ONG / Association</option>
+                            <option value="government">Administration publique</option>
+                            <option value="media">Médias / Communication</option>
+                            <option value="industry">Industrie / Manufacturing</option>
+                            <option value="real_estate">Immobilier</option>
+                            <option value="other">Autre</option>
+                          </select>
+                        </div>
+                        <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Taille</label>
+                          <select id="ent-size" class="fld">
+                            <option value="">— Sélectionnez —</option>
+                            <option value="1-10">1 – 10 employés</option>
+                            <option value="11-50">11 – 50 employés</option>
+                            <option value="51-200">51 – 200 employés</option>
+                            <option value="201-500">201 – 500 employés</option>
+                            <option value="500+">500+ employés</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- Entreprise · 2 -->
+                  <section data-step="ent-contact" class="reg-step hidden">
+                    <div class="text-center mb-5">
+                      <h2 class="text-lg font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Coordonnées</h2>
+                      <p class="text-sm text-gray-500 mt-1">Où pouvons-nous vous joindre&nbsp;?</p>
+                    </div>
+                    <div class="space-y-4">
+                      <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Pays <span class="text-red-500">*</span></label><select id="ent-country" class="fld"><option value="">— Sélectionnez —</option></select></div>
+                      <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Téléphone pro</label><input id="ent-phone" type="tel" placeholder="+237 6XX XXX XXX" class="fld" /></div>
+                        <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Site web</label><input id="ent-website" type="url" placeholder="https://…" class="fld" /></div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <!-- Entreprise · 3 -->
+                  <section data-step="ent-manager" class="reg-step hidden">
+                    <div class="text-center mb-5">
+                      <h2 class="text-lg font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Responsable du compte</h2>
+                      <p class="text-sm text-gray-500 mt-1">La personne référente pour KBForms</p>
+                    </div>
+                    <div class="space-y-4">
+                      <div class="grid grid-cols-2 gap-3">
+                        <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Prénom <span class="text-red-500">*</span></label><input id="ent-first" type="text" placeholder="Marie" class="fld" /></div>
+                        <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Nom <span class="text-red-500">*</span></label><input id="ent-last" type="text" placeholder="Curie" class="fld" /></div>
+                      </div>
+                      <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Poste / Fonction</label><input id="ent-jobtitle" type="text" placeholder="Directrice générale, CTO…" class="fld" /></div>
+                      <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Email professionnel <span class="text-red-500">*</span></label><input id="ent-email" type="email" placeholder="marie@entreprise.com" class="fld" /></div>
+                    </div>
+                  </section>
+
+                  <!-- Entreprise · 4 -->
+                  <section data-step="ent-security" class="reg-step hidden">
+                    <div class="text-center mb-5">
+                      <h2 class="text-lg font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Sécurité</h2>
+                      <p class="text-sm text-gray-500 mt-1">Choisissez un mot de passe</p>
+                    </div>
+                    <div class="space-y-4">
+                      <div>
+                        <label class="block text-[13px] font-medium text-gray-700 mb-1.5">Mot de passe <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                          <input id="ent-password" type="password" placeholder="••••••••" class="fld pr-11" />
+                          <button type="button" onclick="togglePwd('ent-password')" aria-label="Afficher le mot de passe" class="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M2.5 12S5.5 5.5 12 5.5 21.5 12 21.5 12 18.5 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1.5">Minimum 8 caractères</p>
+                      </div>
+                      <div><label class="block text-[13px] font-medium text-gray-700 mb-1.5">Confirmer <span class="text-red-500">*</span></label><input id="ent-password2" type="password" placeholder="••••••••" class="fld" /></div>
+                    </div>
+                  </section>
+
+                </div>
+
+                <div id="recaptcha-register" class="hidden mt-4 flex justify-center"></div>
+                <p id="reg-error" class="text-[13px] font-medium text-red-600 text-center mt-4 hidden"></p>
+
+                <div id="reg-nav" class="flex gap-3 mt-6 hidden">
+                  <button type="button" id="reg-back" onclick="regBack()" class="h-11 px-5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition">Retour</button>
+                  <button type="submit" id="reg-next" class="btn-primary flex-1"><span id="reg-next-label">Continuer</span></button>
+                </div>
+
+                <p class="text-sm text-gray-500 text-center mt-5">Déjà un compte&nbsp;? <button type="button" onclick="switchTab('login')" class="text-indigo-600 font-semibold hover:text-indigo-700">Se connecter</button></p>
+              </form>
+            </div>
+
+            <!-- MOT DE PASSE OUBLIÉ -->
+            <div id="form-forgot" class="auth-panel hidden">
+              <div id="fp-step-email">
+                <div class="text-center mb-6">
+                  <h1 class="text-[22px] font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Mot de passe oublié</h1>
+                  <p class="text-sm text-gray-500 mt-1">Entrez votre email, nous vous envoyons un code à 6 chiffres.</p>
+                </div>
+                <form onsubmit="return forgotSubmit(event)" class="space-y-4">
+                  <div>
+                    <label for="fp-email" class="block text-[13px] font-medium text-gray-700 mb-1.5">Email</label>
+                    <input id="fp-email" type="email" required autocomplete="email" placeholder="vous@exemple.com" class="fld" />
+                  </div>
+                  <p id="fp-error" class="text-[13px] font-medium text-red-600 hidden"></p>
+                  <button type="submit" id="fp-send-btn" class="btn-primary">Envoyer le code</button>
+                </form>
+              </div>
+
+              <div id="fp-step-code" class="hidden">
+                <div class="text-center mb-6">
+                  <h1 class="text-[22px] font-bold tracking-tight" style="font-family:'Plus Jakarta Sans'">Vérification</h1>
+                  <p class="text-sm text-gray-500 mt-1">Code envoyé à <span id="fp-email-echo" class="font-medium text-gray-700"></span>.</p>
+                </div>
+                <form onsubmit="return resetSubmit(event)" class="space-y-4">
+                  <div>
+                    <label for="fp-code" class="block text-[13px] font-medium text-gray-700 mb-1.5">Code à 6 chiffres</label>
+                    <input id="fp-code" inputmode="numeric" maxlength="6" required placeholder="000000" class="fld text-center font-semibold tracking-[0.5em]" />
+                  </div>
+                  <div>
+                    <label for="fp-new" class="block text-[13px] font-medium text-gray-700 mb-1.5">Nouveau mot de passe</label>
+                    <div class="relative">
+                      <input id="fp-new" type="password" required placeholder="••••••••" class="fld pr-11" />
+                      <button type="button" onclick="togglePwd('fp-new')" aria-label="Afficher le mot de passe" class="absolute right-1.5 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M2.5 12S5.5 5.5 12 5.5 21.5 12 21.5 12 18.5 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                      </button>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-1.5">Minimum 8 caractères</p>
+                  </div>
+                  <div>
+                    <label for="fp-new2" class="block text-[13px] font-medium text-gray-700 mb-1.5">Confirmer</label>
+                    <input id="fp-new2" type="password" required placeholder="••••••••" class="fld" />
+                  </div>
+                  <p id="fp-error2" class="text-[13px] font-medium text-red-600 hidden"></p>
+                  <div class="flex gap-3">
+                    <button type="button" onclick="fpBackToEmail()" class="h-11 px-5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition">Retour</button>
+                    <button type="submit" id="fp-reset-btn" class="btn-primary flex-1">Réinitialiser</button>
+                  </div>
+                  <p class="text-sm text-gray-500 text-center">Pas reçu&nbsp;? <button type="button" onclick="forgotResend()" class="text-indigo-600 font-semibold hover:text-indigo-700">Renvoyer</button></p>
+                </form>
+              </div>
+
+              <p class="text-sm text-gray-500 text-center mt-5"><button type="button" onclick="switchTab('login')" class="text-indigo-600 font-semibold hover:text-indigo-700">← Retour à la connexion</button></p>
+            </div>
+            </div><!-- /#auth-panels -->
+
+            <p class="text-[11px] leading-relaxed text-gray-400 text-center mt-7">
+              En continuant, vous acceptez nos <a href="#" class="underline underline-offset-2 hover:text-gray-600">Conditions</a> et notre <a href="#" class="underline underline-offset-2 hover:text-gray-600">Politique de confidentialité</a>.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <p class="text-center text-xs text-white/45 mt-5">© KBForms · Plateforme SaaS de formulaires dynamiques</p>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script>
+    // Destination après connexion : ?next=/chemin interne (sinon dashboard).
+    function postAuthDest() {
+      const n = getQueryParam('next');
+      return (n && n.startsWith('/') && !n.startsWith('//')) ? n : '/dashboard';
+    }
+    (function redirectIfLoggedIn() {
+      const t = KBF_AUTH.getToken();
+      if (t && !KBF_AUTH.isTokenExpired(t)) window.location.href = postAuthDest();
+    })();
+
+    // Pré-remplir l'email (venant d'un lien d'invitation par ex.)
+    window.addEventListener('DOMContentLoaded', () => {
+      const em = getQueryParam('email');
+      if (em) { const f = document.getElementById('login-email'); if (f) f.value = em; }
+
+      // Capacités d'auth configurées côté serveur : bouton Google + CAPTCHA
+      fetch('/auth/config').then(r => r.json()).then(c => {
+        if (c && c.google) {
+          document.getElementById('google-auth')?.classList.remove('hidden');
+          // Propager ?next= à travers le flux Google (retour sur la page d'invitation, etc.)
+          const nx = getQueryParam('next');
+          const gl = document.getElementById('google-auth-link');
+          if (nx && gl) gl.href = '/auth/google?next=' + encodeURIComponent(nx);
+        }
+        if (c && c.recaptcha_site_key) loadRecaptcha(c.recaptcha_site_key);
+      }).catch(() => {});
+
+      // Retours d'erreur du flux Google
+      const GERR = {
+        google_denied:   'Connexion Google annulée.',
+        google_disabled: 'La connexion Google n\'est pas configurée.',
+        google_state:    'Session Google expirée, réessayez.',
+        google_failed:   'Échec de la connexion Google.',
+      };
+      const e = getQueryParam('error');
+      if (e && GERR[e]) { showToast(GERR[e], 'error'); history.replaceState(null, '', '/login'); }
+    });
+
+    /* ============ CAPTCHA — Google reCAPTCHA v2 ========================== */
+    let RECAPTCHA_KEY = null, rcLoginId = null, rcRegisterId = null, rcReady = false;
+    function rcEnabled() { return !!RECAPTCHA_KEY; }
+    function loadRecaptcha(key) {
+      RECAPTCHA_KEY = key;
+      document.getElementById('recaptcha-login')?.classList.remove('hidden');
+      window.kbfRecaptchaInit = () => {
+        rcReady = true;
+        renderRc('recaptcha-login', id => rcLoginId = id);
+        if (REG.current && REG.current !== 'type') renderRegNav();
+      };
+      const s = document.createElement('script');
+      s.src = 'https://www.google.com/recaptcha/api.js?onload=kbfRecaptchaInit&render=explicit';
+      s.async = true; s.defer = true;
+      document.head.appendChild(s);
+    }
+    function renderRc(containerId, setId) {
+      if (!rcReady || !RECAPTCHA_KEY || !window.grecaptcha) return;
+      const el = document.getElementById(containerId);
+      if (!el || el.dataset.rendered) return;
+      el.dataset.rendered = '1';
+      try {
+        setId(grecaptcha.render(el, {
+          sitekey: RECAPTCHA_KEY,
+          // Le jeton d'une case cochée expire après ~2 min : reCAPTCHA la
+          // décoche seul. On le signale discrètement, la soumission redemande
+          // de toute façon un jeton valide.
+          'expired-callback': () => showToast('La vérification a expiré, recochez la case.', 'warning'),
+          'error-callback': () => {},
+        }));
+      } catch (_) { el.dataset.rendered = ''; }
+    }
+    function rcToken(id) { return (id !== null && window.grecaptcha) ? grecaptcha.getResponse(id) : ''; }
+    function rcReset(id) { if (id !== null && window.grecaptcha) grecaptcha.reset(id); }
+
+    const COUNTRIES = ["Afghanistan","Afrique du Sud","Albanie","Algérie","Allemagne","Angola","Arabie Saoudite","Argentine","Australie","Autriche","Bangladesh","Belgique","Bénin","Bolivie","Brésil","Bulgarie","Burkina Faso","Burundi","Cameroun","Canada","Chili","Chine","Colombie","Congo (Brazzaville)","Congo (Kinshasa)","Corée du Sud","Côte d'Ivoire","Croatie","Cuba","Danemark","Égypte","Émirats arabes unis","Espagne","États-Unis","Éthiopie","Finlande","France","Gabon","Ghana","Grèce","Guinée","Haïti","Hongrie","Inde","Indonésie","Irak","Iran","Irlande","Israël","Italie","Japon","Jordanie","Kazakhstan","Kenya","Koweït","Liban","Libye","Luxembourg","Madagascar","Malaisie","Mali","Maroc","Mauritanie","Mexique","Mozambique","Myanmar","Namibie","Népal","Niger","Nigeria","Norvège","Nouvelle-Zélande","Ouganda","Pakistan","Palestine","Panama","Paraguay","Pays-Bas","Pérou","Philippines","Pologne","Portugal","Qatar","République tchèque","Roumanie","Royaume-Uni","Russie","Rwanda","Sénégal","Serbie","Sierra Leone","Singapour","Slovaquie","Somalie","Soudan","Sri Lanka","Suède","Suisse","Syrie","Tanzanie","Tchad","Thaïlande","Togo","Tunisie","Turquie","Ukraine","Uruguay","Venezuela","Vietnam","Yémen","Zimbabwe"];
+
+    ['ind-country','ent-country'].forEach(id => {
+      const sel = document.getElementById(id);
+      COUNTRIES.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+    });
+
+    /* ============ Bascule Connexion / Inscription ========================= */
+    const AUTH_PANELS = { login: 'form-login', register: 'form-register', forgot: 'form-forgot' };
+    function switchTab(which) {
+      const panels = document.getElementById('auth-panels');
+      const nextId = AUTH_PANELS[which];
+      if (!nextId || panels.dataset.anim === '1') return;
+      const next = document.getElementById(nextId);
+      if (!next || !next.classList.contains('hidden')) return;
+      const prev = [...panels.querySelectorAll('.auth-panel')].find(p => !p.classList.contains('hidden'));
+
+      const on  = 'px-5 py-2 text-sm font-semibold rounded-lg bg-white text-gray-900 shadow-sm transition';
+      const off = 'px-5 py-2 text-sm font-semibold rounded-lg text-gray-500 hover:text-gray-800 transition';
+      document.getElementById('tab-login').className    = which === 'login'    ? on : off;
+      document.getElementById('tab-register').className = which === 'register' ? on : off;
+
+      if (which === 'forgot') resetForgot();
+
+      const reduce = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+      if (reduce) { if (prev) prev.classList.add('hidden'); next.classList.remove('hidden'); return; }
+
+      panels.dataset.anim = '1';
+      panels.style.height = panels.offsetHeight + 'px';
+      if (prev) prev.classList.add('is-leaving');
+
+      setTimeout(() => {
+        if (prev) { prev.classList.add('hidden'); prev.classList.remove('is-leaving'); }
+        next.classList.remove('hidden');
+        next.classList.add('is-entering');
+        panels.style.height = next.offsetHeight + 'px';
+        requestAnimationFrame(() => next.classList.remove('is-entering'));
+        setTimeout(() => { panels.style.height = ''; panels.dataset.anim = ''; }, 360);
+      }, 190);
+    }
+
+    // ── Mot de passe oublié ──────────────────────────────────────────────
+    let fpEmail = '';
+    function fpStep(which) {
+      document.getElementById('fp-step-email').classList.toggle('hidden', which !== 'email');
+      document.getElementById('fp-step-code').classList.toggle('hidden', which !== 'code');
+    }
+    function resetForgot() {
+      fpStep('email');
+      ['fp-error', 'fp-error2'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      ['fp-code', 'fp-new', 'fp-new2'].forEach(id => { document.getElementById(id).value = ''; });
+    }
+    function fpBackToEmail() { fpStep('email'); }
+
+    async function forgotSubmit(e) {
+      e.preventDefault();
+      const err = document.getElementById('fp-error'); err.classList.add('hidden');
+      const btn = document.getElementById('fp-send-btn');
+      fpEmail = document.getElementById('fp-email').value.trim();
+      btn.disabled = true; btn.textContent = 'Envoi…';
+      const { ok, data } = await KBF_API.post('/auth/forgot-password', { email: fpEmail }, false);
+      btn.disabled = false; btn.textContent = 'Envoyer le code';
+      if (!ok) { err.textContent = data?.error || 'Erreur, réessayez.'; err.classList.remove('hidden'); return false; }
+      document.getElementById('fp-email-echo').textContent = fpEmail;
+      fpStep('code');
+      if (data?.dev_code) showToast('Mode dev — code : ' + data.dev_code, 'info');
+      document.getElementById('fp-code').focus();
+      return false;
+    }
+
+    async function forgotResend() {
+      if (!fpEmail) return;
+      const { data } = await KBF_API.post('/auth/forgot-password', { email: fpEmail }, false);
+      showToast('Nouveau code envoyé' + (data?.dev_code ? ' — dev : ' + data.dev_code : '.'), data?.dev_code ? 'info' : 'success');
+    }
+
+    async function resetSubmit(e) {
+      e.preventDefault();
+      const err = document.getElementById('fp-error2'); err.classList.add('hidden');
+      const code = document.getElementById('fp-code').value.trim();
+      const pw   = document.getElementById('fp-new').value;
+      const pw2  = document.getElementById('fp-new2').value;
+      if (pw.length < 8) { err.textContent = 'Minimum 8 caractères'; err.classList.remove('hidden'); return false; }
+      if (pw !== pw2)    { err.textContent = 'Les mots de passe ne correspondent pas'; err.classList.remove('hidden'); return false; }
+      const btn = document.getElementById('fp-reset-btn');
+      btn.disabled = true; btn.textContent = 'Réinitialisation…';
+      const { ok, data } = await KBF_API.post('/auth/reset-password', { email: fpEmail, code, password: pw }, false);
+      btn.disabled = false; btn.textContent = 'Réinitialiser';
+      if (!ok) { err.textContent = data?.error || 'Échec de la réinitialisation.'; err.classList.remove('hidden'); return false; }
+      if (data?.token) { KBF_AUTH.save(data.token, null); window.location.href = postAuthDest(); return false; }
+      showToast('Mot de passe réinitialisé. Connectez-vous.');
+      switchTab('login');
+      return false;
+    }
+
+    function togglePwd(id) { const i = document.getElementById(id); i.type = i.type === 'password' ? 'text' : 'password'; }
+
+    /* ============ Connexion ============================================== */
+    async function doLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const errEl = document.getElementById('login-error');
+      const btn = document.getElementById('login-btn');
+      errEl.classList.add('hidden');
+      if (rcEnabled() && !rcToken(rcLoginId)) {
+        errEl.textContent = 'Cochez la case « Je ne suis pas un robot ».';
+        errEl.classList.remove('hidden');
+        return false;
+      }
+      btn.disabled = true;
+      document.getElementById('login-spinner').classList.remove('hidden');
+      const { ok, data } = await KBF_API.post('/login', { email, password, recaptcha_token: rcToken(rcLoginId) }, false);
+      btn.disabled = false; document.getElementById('login-spinner').classList.add('hidden');
+      if (ok && data?.token) { KBF_AUTH.save(data.token, data.user); window.location.href = postAuthDest(); }
+      else {
+        errEl.textContent = data?.message || data?.error || 'Identifiants invalides';
+        if (data?.debug) { console.log('[captcha debug]', data.debug); errEl.textContent += ' — DEBUG: ' + JSON.stringify(data.debug); }
+        errEl.classList.remove('hidden');
+        rcReset(rcLoginId);
+      }
+      return false;
+    }
+
+    /* ============ Inscription — assistant multi-étapes ================== */
+    const REG = { role: null, current: 'type' };
+
+    const REG_FLOW = {
+      individual: ['type', 'ind-identity', 'ind-account'],
+      enterprise: ['type', 'ent-company', 'ent-contact', 'ent-manager', 'ent-security'],
+    };
+    const REG_REQUIRED = {
+      'ind-identity': ['ind-first', 'ind-last'],
+      'ind-account' : ['ind-email', 'ind-password', 'ind-password2'],
+      'ent-company' : ['ent-org'],
+      'ent-contact' : ['ent-country'],
+      'ent-manager' : ['ent-first', 'ent-last', 'ent-email'],
+      'ent-security': ['ent-password', 'ent-password2'],
+    };
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    function regFlow()      { return REG.role ? REG_FLOW[REG.role] : ['type']; }
+    function stepEl(name)   { return document.querySelector('[data-step="' + name + '"]'); }
+    function regError(msg)  { const e = document.getElementById('reg-error'); e.textContent = msg; e.classList.remove('hidden'); }
+    function labelFor(el)   { const l = el.closest('div')?.querySelector('label'); return l ? l.textContent.replace('*', '').trim() : 'Ce champ'; }
+
+    function regSetRole(role) {
+      REG.role = role;
+      document.querySelectorAll('.role-card').forEach(b => b.classList.toggle('selected', b.dataset.role === role));
+      regGoto(regFlow()[1], false);
+    }
+
+    function renderRegNav() {
+      const flow  = regFlow();
+      const idx   = flow.indexOf(REG.current);        // 0 = "type", >=1 = étapes du rôle
+      const isType = REG.current === 'type';
+      const total = flow.length - 1;
+      const isLast = idx === flow.length - 1;
+
+      document.getElementById('reg-nav').classList.toggle('hidden', isType);
+      document.getElementById('reg-progress').classList.toggle('hidden', isType);
+      document.getElementById('reg-next-label').textContent = isLast ? 'Créer mon compte' : 'Continuer';
+
+      // CAPTCHA : visible uniquement à la dernière étape de l'inscription
+      const rcReg = document.getElementById('recaptcha-register');
+      if (rcReg && rcEnabled()) {
+        rcReg.classList.toggle('hidden', !isLast);
+        if (isLast) renderRc('recaptcha-register', id => rcRegisterId = id);
+      }
+
+      if (!isType) {
+        document.getElementById('reg-step-label').textContent = 'Étape ' + idx + ' sur ' + total;
+        const bars = document.getElementById('reg-bars');
+        bars.innerHTML = '';
+        for (let i = 1; i < flow.length; i++) {
+          const s = document.createElement('span');
+          s.className = 'h-1.5 flex-1 rounded-full ' + (i < idx ? 'bg-indigo-600' : i === idx ? 'bg-indigo-400' : 'bg-gray-200');
+          bars.appendChild(s);
+        }
+      }
+    }
+
+    function regGoto(name, back) {
+      const steps  = document.getElementById('reg-steps');
+      const fromEl = stepEl(REG.current);
+      const toEl   = stepEl(name);
+      if (!toEl || name === REG.current || steps.dataset.anim === '1') return;
+
+      document.getElementById('reg-error').classList.add('hidden');
+      REG.current = name;
+      renderRegNav();
+
+      const reduce = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+      if (reduce) { fromEl.classList.add('hidden'); toEl.classList.remove('hidden'); return; }
+
+      steps.dataset.anim = '1';
+      steps.style.height = steps.offsetHeight + 'px';
+      fromEl.classList.add(back ? 'is-back-leaving' : 'is-leaving');
+
+      setTimeout(() => {
+        fromEl.classList.add('hidden');
+        fromEl.classList.remove('is-leaving', 'is-back-leaving');
+        toEl.classList.remove('hidden');
+        toEl.classList.add(back ? 'is-back-entering' : 'is-entering');
+        steps.style.height = toEl.offsetHeight + 'px';
+        requestAnimationFrame(() => toEl.classList.remove('is-entering', 'is-back-entering'));
+        setTimeout(() => {
+          steps.style.height = '';
+          steps.dataset.anim = '';
+          toEl.querySelector('input, select')?.focus({ preventScroll: true });
+        }, 360);
+      }, 170);
+    }
+
+    function regBack() {
+      const flow = regFlow();
+      const i = flow.indexOf(REG.current);
+      if (i > 0) regGoto(flow[i - 1], true);
+    }
+
+    function validateStep(name) {
+      for (const id of (REG_REQUIRED[name] || [])) {
+        const el = document.getElementById(id);
+        if (!el.value.trim()) { el.focus(); return 'Champ requis : ' + labelFor(el); }
+      }
+      if (name === 'ind-account' || name === 'ent-security') {
+        const p = name === 'ind-account' ? 'ind' : 'ent';
+        const pw  = document.getElementById(p + '-password').value;
+        const pw2 = document.getElementById(p + '-password2').value;
+        if (pw.length < 8) return 'Le mot de passe doit contenir au moins 8 caractères';
+        if (pw !== pw2)    return 'Les mots de passe ne correspondent pas';
+      }
+      if (name === 'ind-account' && !EMAIL_RE.test(document.getElementById('ind-email').value.trim())) return 'Adresse email invalide';
+      if (name === 'ent-manager' && !EMAIL_RE.test(document.getElementById('ent-email').value.trim())) return 'Adresse email invalide';
+      return null;
+    }
+
+    function regSubmit(e) {
+      e.preventDefault();
+      document.getElementById('reg-error').classList.add('hidden');
+
+      if (REG.current === 'type') {
+        if (!REG.role) regError('Choisissez un type de compte');
+        return false;
+      }
+      const problem = validateStep(REG.current);
+      if (problem) { regError(problem); return false; }
+
+      const flow = regFlow();
+      const i = flow.indexOf(REG.current);
+      if (i < flow.length - 1) { regGoto(flow[i + 1], false); return false; }
+
+      if (rcEnabled() && !rcToken(rcRegisterId)) {
+        regError('Cochez la case « Je ne suis pas un robot ».');
+        return false;
+      }
+      return doFinalRegister();
+    }
+
+    async function doFinalRegister() {
+      const btn = document.getElementById('reg-next');
+      const lbl = document.getElementById('reg-next-label');
+      const v = id => document.getElementById(id).value.trim();
+      const role = REG.role;
+      const email = role === 'individual' ? v('ind-email') : v('ent-email');
+      const password = document.getElementById(role === 'individual' ? 'ind-password' : 'ent-password').value;
+
+      let payload;
+      if (role === 'individual') {
+        payload = { first_name: v('ind-first'), last_name: v('ind-last'), email, password,
+          account_type: 'individual', country: document.getElementById('ind-country').value || null };
+      } else {
+        payload = { first_name: v('ent-first'), last_name: v('ent-last'), email, password,
+          account_type: 'enterprise', organization: v('ent-org'),
+          industry: document.getElementById('ent-industry').value || null,
+          company_size: document.getElementById('ent-size').value || null,
+          country: document.getElementById('ent-country').value || null,
+          phone: v('ent-phone') || null, website: v('ent-website') || null, job_title: v('ent-jobtitle') || null };
+      }
+
+      payload.recaptcha_token = rcToken(rcRegisterId);
+
+      btn.disabled = true; lbl.textContent = 'Création…';
+      const { ok, data } = await KBF_API.post('/register', payload, false);
+      if (!ok) {
+        btn.disabled = false; renderRegNav();
+        regError(data?.message || data?.error || 'Inscription échouée');
+        rcReset(rcRegisterId);
+        return false;
+      }
+      if (data?.token) {
+        KBF_AUTH.save(data.token, null);
+        window.location.href = postAuthDest();
+        return false;
+      }
+      // Repli : pas de token renvoyé → connexion classique
+      const r2 = await KBF_API.post('/login', { email, password, recaptcha_token: rcToken(rcRegisterId) }, false);
+      if (r2.ok && r2.data?.token) { KBF_AUTH.save(r2.data.token, r2.data.user); window.location.href = postAuthDest(); }
+      else window.location.href = '/login';
+      return false;
+    }
+
+    renderRegNav();
+
+    /* ============ Hauteur de carte animée en douceur ==================== */
+    /* Tout changement de contenu d'un panneau (CAPTCHA qui apparaît, message
+       d'erreur, étape d'inscription…) fait glisser la hauteur au lieu de
+       sauter. On ne touche pas à l'animation de bascule Connexion↔Inscription
+       (data-anim="1") qui gère déjà son propre morphing. */
+    (function smoothAuthHeight() {
+      const panels = document.getElementById('auth-panels');
+      if (!panels || !('ResizeObserver' in window)) return;
+      if (window.matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+
+      const visible = () =>
+        [...panels.children].find(el => !el.classList.contains('hidden')) || null;
+
+      let raf = 0, endTimer = 0;
+      const apply = () => {
+        if (panels.dataset.anim === '1') return;      // laisse la bascule faire
+        if (document.getElementById('reg-steps')?.dataset.anim === '1') return; // idem wizard
+        const p = visible();
+        if (!p) return;
+        const target = p.scrollHeight;
+        const current = parseFloat(panels.style.height) || panels.offsetHeight;
+        if (Math.abs(target - current) < 1) {
+          if (!panels.style.height) panels.style.height = target + 'px'; // re-fixe sans animer
+          return;
+        }
+        panels.classList.add('is-sizing');
+        panels.style.height = target + 'px';
+        clearTimeout(endTimer);
+        endTimer = setTimeout(() => panels.classList.remove('is-sizing'), 360);
+      };
+      const schedule = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(apply); };
+
+      const ro = new ResizeObserver(schedule);
+      [...panels.children].forEach(c => ro.observe(c));
+
+      // Re-fixe la hauteur quand une animation intégrée (bascule ou wizard) se
+      // termine, pour que le prochain changement de contenu glisse aussi.
+      const watchAnim = el => el && new MutationObserver(() => {
+        if (el.dataset.anim !== '1') { cancelAnimationFrame(raf); raf = requestAnimationFrame(apply); }
+      }).observe(el, { attributes: true, attributeFilter: ['data-anim'] });
+      watchAnim(panels);
+      watchAnim(document.getElementById('reg-steps'));
+
+      // Fixe la hauteur initiale sans animation (sinon la carte « pousse » au chargement)
+      requestAnimationFrame(() => {
+        const p = visible();
+        if (p) panels.style.height = p.scrollHeight + 'px';
+      });
+    })();
+  </script>
+</body>
+</html>

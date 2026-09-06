@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-7xl w-full mx-auto animate-fade-in">
+
+      <!-- Stats cards -->
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8" id="stats-grid">
+        <div class="kb-skeleton h-28"></div><div class="kb-skeleton h-28"></div><div class="kb-skeleton h-28"></div><div class="kb-skeleton h-28"></div>
+      </section>
+
+      <!-- Chart réponses 30 jours -->
+      <section class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-gray-900">Réponses — 30 derniers jours</h2>
+          <span id="chart-total" class="text-xs text-gray-400"></span>
+        </div>
+        <div id="chart-loading" class="flex items-center justify-center h-24 text-sm text-gray-400">
+          Chargement du graphique…
+        </div>
+        <canvas id="responsesChart" height="80" class="hidden"></canvas>
+      </section>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Recent forms -->
+        <section class="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold text-gray-900">Formulaires récents</h2>
+            <a href="/forms" class="text-sm text-indigo-600 font-medium hover:underline inline-flex items-center gap-1">Voir tout <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          </div>
+          <div id="recent-forms" class="space-y-3">
+            <div class="kb-skeleton h-16"></div><div class="kb-skeleton h-16"></div><div class="kb-skeleton h-16"></div>
+          </div>
+        </section>
+
+        <!-- Activity -->
+        <section class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-4">Activité récente</h2>
+          <ul id="activity" class="space-y-3 text-sm">
+            <li class="kb-skeleton h-12"></li><li class="kb-skeleton h-12"></li><li class="kb-skeleton h-12"></li>
+          </ul>
+        </section>
+      </div>
+
+      <!-- Quick actions -->
+      <section class="mt-8 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Actions rapides</h2>
+        <div class="flex flex-wrap gap-3">
+          <a href="/forms?new=1" class="btn btn-primary">+ Nouveau formulaire</a>
+          <a href="/forms?import=1" class="btn btn-secondary">Importer JSON/CSV</a>
+          <a href="/form-analytics" class="btn btn-secondary">Voir analytics</a>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    if (KBF_AUTH.requireAuth()) {
+      renderSidebar('dashboard');
+      renderTopBar({ title: 'Dashboard', actions: '<a href="/forms?new=1" class="btn btn-primary btn-sm">+ Nouveau formulaire</a>' });
+      loadDashboard();
+    }
+
+    function statCard(label, value, color, icon, hint) {
+      return `
+        <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="text-xs font-medium text-gray-500 uppercase tracking-wide">${label}</div>
+              <div class="text-3xl font-bold mt-1 text-gray-900">${value}</div>
+              ${hint ? `<div class="text-xs text-gray-400 mt-1">${hint}</div>` : ''}
+            </div>
+            <div class="w-10 h-10 rounded-xl ${color} flex items-center justify-center text-white">${kbIcon(icon, 'w-5 h-5')}</div>
+          </div>
+        </div>`;
+    }
+
+    async function loadResponsesChart(forms) {
+      const aggregated = {}; // { 'YYYY-MM-DD': count }
+
+      await Promise.all(forms.map(async (form) => {
+        try {
+          const { ok, data } = await KBF_API.get(`/forms/${form.id}/analytics`);
+          if (!ok || !data?.responses_per_day) return;
+          data.responses_per_day.forEach(({ day, count }) => {
+            aggregated[day] = (aggregated[day] || 0) + Number(count);
+          });
+        } catch (_) {}
+      }));
+
+      // Construire les 30 derniers jours (jours sans réponse → 0)
+      const labels = [];
+      const values = [];
+      let grandTotal = 0;
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        const count = aggregated[key] || 0;
+        labels.push(key.slice(5).replace('-', '/'));
+        values.push(count);
+        grandTotal += count;
+      }
+
+      document.getElementById('chart-loading').classList.add('hidden');
+      const canvas = document.getElementById('responsesChart');
+      canvas.classList.remove('hidden');
+      document.getElementById('chart-total').textContent = `${grandTotal} réponse(s) sur la période`;
+
+      new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Réponses',
+            data: values,
+            fill: true,
+            tension: 0.4,
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99,102,241,0.08)',
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            pointBackgroundColor: '#6366f1',
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => ` ${ctx.parsed.y} réponse(s)`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { precision: 0, color: '#9ca3af' },
+              grid: { color: 'rgba(0,0,0,0.04)' }
+            },
+            x: {
+              ticks: {
+                color: '#9ca3af',
+                maxTicksLimit: 10,  // évite la surcharge de labels
+              },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    async function loadDashboard() {
+      const user = KBF_AUTH.getUser();
+      const { ok, data } = await KBF_API.get(`/users/${user.id}/forms`);
+      const forms = (ok && Array.isArray(data)) ? data : (data?.forms || []);
+      const total = forms.length;
+      const published = forms.filter(f => f.status === 'published' || f.is_published).length;
+      let totalResponses = 0;
+      forms.forEach(f => totalResponses += (f.response_count || 0));
+      const weekAgo = Date.now() - 7*24*3600*1000;
+      const newThisWeek = forms.filter(f => new Date(f.created_at).getTime() > weekAgo).length;
+
+      document.getElementById('stats-grid').innerHTML = [
+        statCard('Formulaires', total, 'bg-indigo-500', 'clipboard'),
+        statCard('Réponses', totalResponses, 'bg-emerald-500', 'mail'),
+        statCard('Publiés', published, 'bg-amber-500', 'rocket'),
+        statCard('Cette semaine', '+' + newThisWeek, 'bg-fuchsia-500', 'chart-line'),
+      ].join('');
+
+      const recent = forms.slice(0, 5);
+      document.getElementById('recent-forms').innerHTML = recent.length ? recent.map(f => `
+        <div class="flex items-center justify-between border border-gray-100 hover:border-indigo-200 rounded-xl p-4">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold text-gray-900 truncate">${escapeHtml(f.title || 'Sans titre')}</div>
+            <div class="text-xs text-gray-500">${formatDate(f.created_at)} · ${f.response_count || 0} réponses</div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-xs px-2 py-1 rounded-full ${(f.is_published||f.status==='published') ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}">${(f.is_published||f.status==='published') ? 'Publié' : 'Brouillon'}</span>
+            <a href="/form-builder?id=${f.id}" class="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700" aria-label="Éditer">${kbIcon('pencil','w-4 h-4')}</a>
+            <a href="/form-responses?id=${f.id}" class="p-1.5 rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-700" aria-label="Réponses">${kbIcon('chart-bar','w-4 h-4')}</a>
+          </div>
+        </div>`).join('') : `<div class="text-sm text-gray-400 italic">Aucun formulaire encore. <a href="/forms?new=1" class="text-indigo-600 font-medium">Créez votre premier !</a></div>`;
+
+      document.getElementById('activity').innerHTML = recent.length ? recent.map(f => `
+        <li class="flex items-start gap-3">
+          <div class="w-2 h-2 mt-2 rounded-full bg-indigo-500"></div>
+          <div class="flex-1">
+            <div class="text-sm text-gray-700"><b>${f.response_count || 0}</b> réponse(s) sur <span class="font-medium">${escapeHtml(f.title)}</span></div>
+            <div class="text-xs text-gray-400">${timeAgo(f.updated_at || f.created_at)}</div>
+          </div>
+        </li>`).join('') : `<li class="text-sm text-gray-400 italic">Aucune activité récente</li>`;
+
+      // Charger le graphique après avoir les formulaires
+      loadResponsesChart(forms);
+    }
+  </script>
+</body>
+</html>

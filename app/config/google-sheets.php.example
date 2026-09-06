@@ -1,0 +1,39 @@
+<?php
+/**
+ * Intégration Google Sheets (export / sync des réponses).
+ *
+ * KBForms utilise un COMPTE DE SERVICE Google (pas la connexion utilisateur).
+ * C'est ce compte qui crée et écrit dans les Sheets.
+ *
+ * ── Console Google Cloud (projet « kbforms », le même que pour OAuth) ──
+ *  1. API et services → Bibliothèque → activer :
+ *       - Google Sheets API
+ *       - Google Drive API        (nécessaire pour « Créer un nouveau Sheet »)
+ *  2. API et services → Identifiants → Créer → Compte de service
+ *       - nom : « kbforms-sheets » → Créer et continuer → Terminer
+ *  3. Ouvrir le compte de service → onglet « Clés » → Ajouter une clé →
+ *     Créer une clé → JSON → un fichier .json est téléchargé.
+ *  4. Poser ce fichier sur le serveur (hors du dossier public), ex :
+ *       /home/heil/Downloads/kbgroup/KBform/app/config/kbforms-sheets-key.json
+ *  5. Copier ce fichier-ci en `google-sheets.php` et renseigner le chemin.
+ *
+ * ── Utilisation ──
+ *  - « Créer un nouveau Sheet » : le Sheet est créé par le compte de service
+ *    ET partagé automatiquement avec l'adresse email du propriétaire du
+ *    formulaire (droit Éditeur) pour que tu puisses l'ouvrir.
+ *  - « Lier un Sheet existant » : partage d'abord ton Sheet (droit Éditeur)
+ *    avec l'adresse du compte de service — elle ressemble à
+ *      kbforms-sheets@kbforms.iam.gserviceaccount.com
+ *    (affichée dans l'onglet Google Sheets une fois ce fichier configuré).
+ */
+
+return [
+    // Option A — chemin vers le fichier JSON de la clé du compte de service :
+    'service_account_json' => __DIR__ . '/kbforms-sheets-key.json',
+
+    // Option B — coller directement le contenu du JSON (à la place de A) :
+    // 'service_account' => [
+    //     'client_email' => '...@kbforms.iam.gserviceaccount.com',
+    //     'private_key'  => "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+    // ],
+];

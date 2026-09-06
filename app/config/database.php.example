@@ -1,0 +1,20 @@
+<?php
+/**
+ * Connexion base de données — NON versionné (voir ce .example).
+ *
+ * Copiez ce fichier en `database.php` et renseignez vos identifiants.
+ * Sans ce fichier ni variables d'environnement, KBForms utilise les valeurs
+ * par défaut du poste de dev (XAMPP : 127.0.0.1 / kbforms / kbforms).
+ *
+ * Variables d'environnement équivalentes (prioritaires sur ce fichier) :
+ *   KBF_DB_HOST  KBF_DB_NAME  KBF_DB_USER  KBF_DB_PASS  KBF_DB_SOCKET  KBF_DB_CHARSET
+ */
+
+return [
+    'host'     => 'fdb1234.awardspace.net',  // hôte MySQL fourni par l'hébergeur
+    'dbname'   => 'moncompte_kbforms',
+    'username' => 'moncompte_kbforms',
+    'password' => 'MOT_DE_PASSE',
+    'charset'  => 'utf8mb4',
+    // 'socket' => '/var/run/mysqld/mysqld.sock',  // au lieu de host, si applicable
+];

@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paramètres · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-5xl w-full mx-auto animate-fade-in">
+
+      <nav class="seg flex-wrap mb-6" id="tabs"></nav>
+
+      <div id="tab-content" class="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
+        <div class="kb-skeleton h-64"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    const formId = Number(getQueryParam('id'));
+    let currentTab = getQueryParam('tab') || 'general';
+    let formData = null;
+
+    const TABS = [
+      { key:'general',       label:'Général' },
+      { key:'theme',         label:'Thème' },
+      { key:'share',         label:'Partage' },
+      { key:'collaborators', label:'Collaborateurs' },
+      { key:'agents',        label:'Agents de terrain' },
+      { key:'assignments',   label:'Assignations' },
+      { key:'webhooks',      label:'Webhooks' },
+      { key:'logic',         label:'Logique' },
+      { key:'sections',      label:'Sections' },
+      { key:'sheets',        label:'Google Sheets' },
+    ];
+
+    if (KBF_AUTH.requireAuth()) {
+      if (!formId) location.href = '/forms';
+      renderSidebar('forms');
+      renderTopBar({ title: 'Paramètres du formulaire', actions: `<a href="/form-builder?id=${formId}" class="text-sm text-indigo-600 font-medium">← Builder</a>` });
+      renderTabs();
+      loadForm();
+    }
+
+    function renderTabs() {
+      document.getElementById('tabs').innerHTML = TABS.map(t => `
+        <button onclick="switchTab('${t.key}')" class="seg-item${t.key===currentTab?' is-active':''}">${t.label}</button>
+      `).join('');
+    }
+
+    async function loadForm() {
+      const { ok, data } = await KBF_API.get(`/forms/${formId}`);
+      if (ok) formData = data.form || data;
+      renderTab();
+    }
+
+    function switchTab(t) { currentTab = t; renderTabs(); renderTab(); history.replaceState(null,'',`?id=${formId}&tab=${t}`); }
+
+    async function renderTab() {
+      const c = document.getElementById('tab-content');
+      c.innerHTML = '<div class="kb-skeleton h-48"></div>';
+      if (currentTab === 'general')       renderGeneral(c);
+      else if (currentTab === 'theme')    renderTheme(c);
+      else if (currentTab === 'share')    renderShare(c);
+      else if (currentTab === 'collaborators') await renderCollab(c);
+      else if (currentTab === 'agents')   await renderAgents(c);
+      else if (currentTab === 'assignments') await renderAssignments(c);
+      else if (currentTab === 'webhooks') await renderWebhooks(c);
+      else if (currentTab === 'logic')    await renderLogic(c);
+      else if (currentTab === 'sections') await renderSections(c);
+      else if (currentTab === 'sheets')   await renderSheets(c);
+    }
+
+    function renderGeneral(c) {
+      const ret = formData?.response_retention_days ?? '';
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-4">Général</h2>
+        <div class="space-y-4 max-w-xl">
+          <div><label class="block text-sm font-medium mb-1">Titre</label><input id="g-title" value="${escapeHtml(formData?.title||'')}" class="fld"></div>
+          <div><label class="block text-sm font-medium mb-1">Description</label><textarea id="g-desc" rows="3" class="fld">${escapeHtml(formData?.description||'')}</textarea></div>
+          <div><label class="block text-sm font-medium mb-1">Message de confirmation</label><textarea id="g-conf" rows="3" class="fld">${escapeHtml(formData?.confirmation_message||'Merci pour votre réponse !')}</textarea></div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Notifier par email à chaque réponse</label>
+            <input id="g-notify" value="${escapeHtml(formData?.notify_emails||'')}" placeholder="vous@exemple.com, collegue@exemple.com" class="fld">
+            <p class="text-xs text-gray-400 mt-1">Adresses séparées par des virgules. Une notification par réponse. Vide = désactivé.</p>
+          </div>
+          <label class="flex items-start gap-2 text-sm">
+            <input type="checkbox" id="g-captcha" class="mt-0.5" ${formData?.require_captcha ? 'checked' : ''}>
+            <span>Exiger un CAPTCHA sur le formulaire public
+              <span class="block text-xs text-gray-400">Anti-spam. Un honeypot et une limite par IP sont déjà actifs en permanence.</span>
+            </span>
+          </label>
+          <button onclick="saveGeneral()" class="btn btn-primary">Sauvegarder</button>
+        </div>
+
+        <hr class="my-6 border-gray-100">
+        <h3 class="font-semibold text-gray-900 mb-1">Rétention des données</h3>
+        <p class="text-sm text-gray-500 mb-3">Les réponses plus anciennes que cette durée peuvent être purgées. Laissez vide pour conserver indéfiniment.</p>
+        <div class="flex items-end gap-2 max-w-xl">
+          <div class="flex-1">
+            <label class="block text-sm font-medium mb-1">Durée de conservation (jours)</label>
+            <input id="g-retention" type="number" min="1" placeholder="illimité" value="${ret}" class="fld">
+          </div>
+          <button onclick="saveRetention()" class="btn btn-secondary">Enregistrer</button>
+          <button onclick="purgeNow()" class="btn btn-danger">Purger maintenant</button>
+        </div>`;
+    }
+    async function saveGeneral() {
+      const r1 = await KBF_API.put(`/forms/${formId}`, {
+        title: document.getElementById('g-title').value,
+        description: document.getElementById('g-desc').value,
+        require_captcha: document.getElementById('g-captcha').checked ? 1 : 0,
+        notify_emails: document.getElementById('g-notify').value.trim(),
+      });
+      const r2 = await KBF_API.post(`/forms/${formId}/confirmation`, { message: document.getElementById('g-conf').value });
+      if (r1.ok) formData = { ...formData, require_captcha: document.getElementById('g-captcha').checked ? 1 : 0 };
+      showToast(r1.ok && r2.ok ? 'Sauvegardé' : 'Erreur', r1.ok && r2.ok ? 'success' : 'error');
+    }
+    async function saveRetention() {
+      const raw = document.getElementById('g-retention').value.trim();
+      const days = raw === '' ? null : Math.max(1, parseInt(raw, 10) || 1);
+      const { ok } = await KBF_API.put(`/forms/${formId}`, { response_retention_days: days });
+      if (ok) { showToast(days ? `Conservation : ${days} jours` : 'Conservation illimitée'); loadForm(); }
+      else showToast('Erreur', 'error');
+    }
+    async function purgeNow() {
+      const raw = document.getElementById('g-retention').value.trim();
+      if (!raw) { showToast('Définissez une durée avant de purger', 'warning'); return; }
+      if (!confirm(`Supprimer définitivement toutes les réponses de plus de ${raw} jours ?`)) return;
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/responses/purge`, { days: parseInt(raw, 10) });
+      showToast(ok && data?.success ? `${data.deleted} réponse(s) purgée(s)` : (data?.error || 'Erreur'), ok && data?.success ? 'success' : 'error');
+    }
+
+    function renderTheme(c) {
+      const t = formData || {};
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-4">Thème</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-4">
+            <div><label class="block text-sm font-medium mb-1">Couleur principale</label><input id="t-color" type="color" value="${t.theme_color||'#4F46E5'}" oninput="updateThemePreview()" class="w-full h-10 border border-gray-200 rounded"></div>
+            <div><label class="block text-sm font-medium mb-1">Image d'en-tête (URL)</label><input id="t-img" value="${escapeHtml(t.header_image||'')}" oninput="updateThemePreview()" class="fld"></div>
+            <div><label class="block text-sm font-medium mb-1">Police</label>
+              <select id="t-font" onchange="updateThemePreview()" class="fld">
+                <option ${t.font_family==='Inter'?'selected':''}>Inter</option>
+                <option ${t.font_family==='Plus Jakarta Sans'?'selected':''}>Plus Jakarta Sans</option>
+                <option ${t.font_family==='Roboto'?'selected':''}>Roboto</option>
+              </select>
+            </div>
+            <div><label class="block text-sm font-medium mb-1">Taille de texte (<span id="t-size-val">${t.font_size||14}</span>px)</label><input id="t-size" type="range" min="12" max="20" value="${t.font_size||14}" oninput="updateThemePreview()" class="w-full"></div>
+            <button onclick="saveTheme()" class="btn btn-primary">Sauvegarder</button>
+          </div>
+          <div class="border border-gray-200 rounded-xl p-4 bg-gray-50">
+            <div class="text-xs uppercase font-semibold text-gray-500 mb-2">Aperçu</div>
+            <div id="t-preview" class="bg-white rounded-lg p-6 shadow-sm">
+              <div id="t-preview-bar" class="h-2 rounded-full mb-4" style="background:${t.theme_color||'#4F46E5'}"></div>
+              <h3 id="t-preview-title" class="font-bold text-gray-900" style="font-family:'${t.font_family||'Inter'}';font-size:${t.font_size||14}px">${escapeHtml(formData?.title||'Titre du formulaire')}</h3>
+              <p id="t-preview-desc" class="text-sm text-gray-500 mt-1">Aperçu live de votre thème</p>
+            </div>
+          </div>
+        </div>`;
+      updateThemePreview();
+    }
+
+    function updateThemePreview() {
+      const color = document.getElementById('t-color')?.value || '#4F46E5';
+      const font  = document.getElementById('t-font')?.value  || 'Inter';
+      const size  = document.getElementById('t-size')?.value  || 14;
+      const img   = document.getElementById('t-img')?.value   || '';
+      const bar   = document.getElementById('t-preview-bar');
+      const title = document.getElementById('t-preview-title');
+      const desc  = document.getElementById('t-preview-desc');
+      const sizeVal = document.getElementById('t-size-val');
+      if (bar)     bar.style.background = color;
+      if (title)   { title.style.fontFamily = `'${font}'`; title.style.fontSize = size + 'px'; }
+      if (desc)    desc.style.fontFamily = `'${font}'`;
+      if (sizeVal) sizeVal.textContent = size;
+      const preview = document.getElementById('t-preview');
+      if (preview) {
+        let existingImg = document.getElementById('t-preview-img');
+        if (img) {
+          if (!existingImg) {
+            existingImg = document.createElement('img');
+            existingImg.id = 't-preview-img';
+            existingImg.className = 'w-full h-20 object-cover rounded mb-3';
+            existingImg.onerror = () => existingImg.remove();
+            preview.prepend(existingImg);
+          }
+          existingImg.src = img;
+        } else if (existingImg) {
+          existingImg.remove();
+        }
+      }
+    }
+
+    async function saveTheme() {
+      const body = {
+        theme_color:  document.getElementById('t-color').value,
+        header_image: document.getElementById('t-img').value || null,
+        font_family:  document.getElementById('t-font').value,
+        font_size:    Number(document.getElementById('t-size').value)
+      };
+      const { ok } = await KBF_API.patch(`/forms/${formId}/theme`, body);
+      if (ok) {
+        formData = { ...formData, ...body };
+        showToast('Thème sauvegardé');
+      } else {
+        showToast('Erreur lors de la sauvegarde', 'error');
+      }
+    }
+
+    function renderShare(c) {
+      const link = formData?.share_link || `${location.origin}/f/${formData?.id}`;
+      const iframe = `<iframe src="${link}" width="100%" height="600" frameborder="0"></iframe>`;
+      const published = formData?.is_published || formData?.status === 'published';
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-4">Partage</h2>
+        <div class="space-y-5">
+          <div class="flex items-center justify-between p-4 border border-gray-200 rounded-xl">
+            <div><div class="font-medium">Statut</div><div class="text-sm text-gray-500">${published?'Le formulaire est accessible publiquement':'Brouillon non publié'}</div></div>
+            <button onclick="togglePublish(${!published})" class="${published?'bg-amber-500 hover:bg-amber-600':'bg-emerald-600 hover:bg-emerald-700'} text-white text-sm font-medium px-4 py-2 rounded-lg">${published?'Dépublier':'Publier'}</button>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Lien public</label>
+            <div class="flex gap-2"><input readonly value="${link}" class="fld flex-1 bg-gray-50"><button onclick="copyToClipboard('${link}')" class="btn btn-secondary btn-sm">Copier</button></div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Mot de passe (optionnel)</label>
+            <div class="flex gap-2"><input id="s-pwd" type="text" placeholder="${formData?.share_password_hash ? 'Protégé — saisir un nouveau mot de passe, ou vider pour retirer' : 'Non protégé'}" class="fld flex-1"><button onclick="savePwd()" class="btn btn-primary btn-sm">Enregistrer</button></div>
+            <p class="text-xs text-gray-400 mt-1">4 caractères minimum. Laisser vide et enregistrer pour retirer la protection.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Code iframe</label>
+            <textarea id="s-iframe" readonly rows="2" class="fld bg-gray-50 font-mono">${escapeHtml(iframe)}</textarea>
+            <button onclick="copyToClipboard(document.getElementById('s-iframe').value)" class="mt-2 btn btn-secondary btn-sm">Copier</button>
+          </div>
+        </div>`;
+    }
+    async function togglePublish(toPublish) {
+      let ok;
+      if (toPublish) {
+        ({ ok } = await KBF_API.post(`/forms/${formId}/publish`, {}));
+      } else {
+        ({ ok } = await KBF_API.put(`/forms/${formId}`, { is_published: 0 }));
+      }
+      if (ok) { showToast(toPublish ? 'Formulaire publié !' : 'Formulaire dépublié'); loadForm(); }
+      else showToast('Erreur lors de l\'opération', 'error');
+    }
+    async function savePwd() {
+      const raw = document.getElementById('s-pwd').value.trim();
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/share-settings`, { password: raw === '' ? null : raw });
+      if (ok) { showToast(raw === '' ? 'Protection retirée' : 'Mot de passe enregistré'); loadForm(); }
+      else showToast(data?.error || 'Erreur', 'error');
+    }
+
+    const ROLE_BADGE = {
+      admin:  'bg-red-100 text-red-700',
+      editor: 'bg-indigo-100 text-indigo-700',
+      viewer: 'bg-gray-100 text-gray-600',
+    };
+    const ROLE_FR = { viewer: 'Lecture seule', editor: 'Édition', admin: 'Administration' };
+
+    async function renderCollab(c) {
+      const [colRes, invRes] = await Promise.all([
+        KBF_API.get(`/forms/${formId}/collaborators`),
+        KBF_API.get(`/forms/${formId}/invitations`),
+      ]);
+      const collabs = Array.isArray(colRes.data) ? colRes.data : (colRes.data?.collaborators || []);
+      const invites = Array.isArray(invRes.data) ? invRes.data : [];
+
+      const acct   = KBF_AUTH.getUser()?.account_type;
+      const isTeam = acct === 'enterprise' || acct === 'admin';
+      const INDIVIDUAL_LIMIT = 1;
+      const seats  = collabs.length + invites.length;
+      const atLimit = !isTeam && seats >= INDIVIDUAL_LIMIT;
+
+      const collabRow = (u) => `
+        <li class="flex items-center gap-3 py-3">
+          <div class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold text-sm shrink-0">${initials(u.name)}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate">${escapeHtml(u.name || u.email || '')}</div>
+            <div class="text-xs text-gray-500 truncate">${escapeHtml(u.email || '')}</div>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[u.role] || ROLE_BADGE.viewer}">${ROLE_FR[u.role] || u.role}</span>
+          <button onclick="removeCollab(${u.user_id || u.id})" class="text-gray-400 hover:text-red-600 p-1" aria-label="Retirer">${kbIcon('trash','w-4 h-4')}</button>
+        </li>`;
+
+      const inviteRow = (v) => `
+        <li class="flex items-center gap-3 py-3">
+          <div class="w-9 h-9 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">${kbIcon('mail','w-4 h-4')}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate">${escapeHtml(v.email)}</div>
+            <div class="text-xs text-gray-400">Invitation envoyée · ${ROLE_FR[v.role] || v.role}</div>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">En attente</span>
+          <button onclick="resendInvite('${encodeURIComponent(v.email)}','${v.role}')" class="text-gray-400 hover:text-indigo-600 p-1" aria-label="Renvoyer">${kbIcon('refresh','w-4 h-4')}</button>
+          <button onclick="revokeInvite(${v.id})" class="text-gray-400 hover:text-red-600 p-1" aria-label="Annuler">${kbIcon('x','w-4 h-4')}</button>
+        </li>`;
+
+      const listHtml = (collabs.map(collabRow).join('') + invites.map(inviteRow).join(''))
+        || '<li class="text-sm text-gray-400 italic py-3">Aucun collaborateur pour l\'instant</li>';
+
+      let inviteBlock;
+      if (atLimit) {
+        inviteBlock = `
+          <div class="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+            <div class="text-sm font-medium text-indigo-900">Limite du compte individuel atteinte</div>
+            <p class="text-xs text-indigo-700 mt-1">Un compte individuel autorise ${INDIVIDUAL_LIMIT} collaborateur par formulaire (invitations en attente comprises). Un compte entreprise permet une équipe illimitée, les rôles et l'annuaire de votre organisation.</p>
+          </div>`;
+      } else {
+        inviteBlock = `
+          <div class="rounded-xl border border-gray-200 p-4">
+            <div class="text-sm font-medium text-gray-800 mb-3">Inviter un collaborateur</div>
+            <label class="field-label" for="c-email">Adresse email</label>
+            <input id="c-email" type="email" placeholder="prenom@exemple.com" class="fld mb-3"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addCollab();}">
+            <div class="flex flex-col sm:flex-row gap-2">
+              <select id="c-role" class="fld sm:w-48">
+                <option value="viewer">Lecture seule</option>
+                <option value="editor" selected>Édition</option>
+                <option value="admin">Administration</option>
+              </select>
+              <button onclick="addCollab()" class="btn btn-primary sm:flex-1">Envoyer l'invitation</button>
+            </div>
+            ${isTeam ? '' : `<p class="text-xs text-gray-500 mt-2">Compte individuel : ${INDIVIDUAL_LIMIT} collaborateur maximum par formulaire.</p>`}
+            <p class="text-xs text-gray-400 mt-1">Un email contenant un lien pour rejoindre le formulaire est envoyé à l'adresse indiquée.</p>
+          </div>`;
+      }
+
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-1">Collaborateurs</h2>
+        <p class="text-sm text-gray-500 mb-4">Les personnes invitées peuvent consulter ou modifier ce formulaire selon leur rôle.</p>
+        <ul class="divide-y divide-gray-100 mb-5">${listHtml}</ul>
+        ${inviteBlock}`;
+    }
+
+    async function addCollab() {
+      const email = document.getElementById('c-email').value.trim();
+      const role  = document.getElementById('c-role').value;
+      if (!email) { showToast('Entrez une adresse email', 'warning'); return; }
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/collaborators`, { email, role });
+      if (ok && data?.success) {
+        showToast(data.message || 'Invitation envoyée');
+        if (data.email_sent === false && data.invite_url) {
+          showToast('Email non envoyé — lien : ' + data.invite_url, 'warning');
+        }
+        renderTab();
+      } else if (data?.code === 'plan_limit') {
+        showToast(data.error, 'warning');
+      } else {
+        showToast(data?.error || 'Erreur', 'error');
+      }
+    }
+    function resendInvite(emailEnc, role) {
+      document.getElementById('c-email') && (document.getElementById('c-email').value = decodeURIComponent(emailEnc));
+      KBF_API.post(`/forms/${formId}/collaborators`, { email: decodeURIComponent(emailEnc), role })
+        .then(({ ok, data }) => {
+          showToast(ok && data?.success ? 'Invitation renvoyée' : (data?.error || 'Erreur'), ok ? 'success' : 'error');
+          renderTab();
+        });
+    }
+    async function revokeInvite(id) {
+      const { ok } = await KBF_API.delete(`/forms/${formId}/invitations/${id}`);
+      showToast(ok ? 'Invitation annulée' : 'Erreur', ok ? 'success' : 'error');
+      renderTab();
+    }
+    async function removeCollab(uid) {
+      if (!confirm('Retirer ce collaborateur ?')) return;
+      const { ok } = await KBF_API.delete(`/forms/${formId}/collaborators/${uid}`);
+      if (ok) { showToast('Collaborateur retiré'); renderTab(); }
+      else showToast('Erreur', 'error');
+    }
+
+    // ── Assignation d'enquêtes à un collaborateur (M2 · B2 — jusqu'ici sans UI) ──
+    const ASG_STATUS_FR    = { pending: 'En attente', in_progress: 'En cours', done: 'Terminé' };
+    const ASG_STATUS_BADGE = { pending: 'bg-amber-50 text-amber-700', in_progress: 'bg-blue-50 text-blue-700', done: 'bg-emerald-50 text-emerald-700' };
+
+    async function renderAssignments(c) {
+      const [asgRes, colRes] = await Promise.all([
+        KBF_API.get(`/forms/${formId}/assignments`),
+        KBF_API.get(`/forms/${formId}/collaborators`),
+      ]);
+      const assignments = (asgRes.ok && Array.isArray(asgRes.data?.assignments)) ? asgRes.data.assignments : [];
+      const collabs = Array.isArray(colRes.data) ? colRes.data : (colRes.data?.collaborators || []);
+
+      const row = (a) => `
+        <li class="flex items-center gap-3 py-3">
+          <div class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold text-sm shrink-0">${initials(a.assignee_name || a.assignee_email)}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate">${escapeHtml(a.assignee_name || a.assignee_email || '')}</div>
+            <div class="text-xs text-gray-500 truncate">${a.note ? escapeHtml(a.note) : 'Aucune consigne'}</div>
+          </div>
+          <select onchange="setAssignmentStatus(${a.id}, this.value)" class="text-xs px-2 py-1.5 rounded-full font-medium border-0 ${ASG_STATUS_BADGE[a.status] || 'bg-gray-100 text-gray-600'}">
+            ${Object.entries(ASG_STATUS_FR).map(([v, l]) => `<option value="${v}" ${a.status === v ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+          <button onclick="removeAssignment(${a.assigned_to_user_id})" class="text-gray-400 hover:text-red-600 p-1" aria-label="Retirer">${kbIcon('trash','w-4 h-4')}</button>
+        </li>`;
+
+      const listHtml = assignments.map(row).join('') || '<li class="text-sm text-gray-400 italic py-3">Aucune assignation pour l\'instant</li>';
+
+      const alreadyAssigned = new Set(assignments.map(a => Number(a.assigned_to_user_id)));
+      const assignable = collabs.filter(u => !alreadyAssigned.has(Number(u.user_id || u.id)));
+
+      let addBlock;
+      if (!collabs.length) {
+        addBlock = `<div class="rounded-xl border border-gray-200 p-4 text-sm text-gray-500">Ajoutez d'abord un <button onclick="switchTab('collaborators')" class="text-indigo-600 font-medium">collaborateur</button> pour pouvoir lui assigner ce formulaire.</div>`;
+      } else if (!assignable.length) {
+        addBlock = `<div class="rounded-xl border border-gray-200 p-4 text-sm text-gray-500">Tous les collaborateurs ont déjà une assignation.</div>`;
+      } else {
+        addBlock = `
+          <div class="rounded-xl border border-gray-200 p-4">
+            <div class="text-sm font-medium text-gray-800 mb-3">Assigner à un collecteur</div>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <select id="asg-user" class="fld sm:w-56">${assignable.map(u => `<option value="${u.user_id || u.id}">${escapeHtml(u.name || u.email)}</option>`).join('')}</select>
+              <input id="asg-note" placeholder="Consigne (optionnel — périmètre, quota…)" class="fld flex-1"
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();addAssignment();}">
+              <button onclick="addAssignment()" class="btn btn-primary">Assigner</button>
+            </div>
+          </div>`;
+      }
+
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-1">Assignations</h2>
+        <p class="text-sm text-gray-500 mb-4">Confiez la collecte de ce formulaire à un collaborateur précis — visible depuis l'app mobile (« Mes formulaires assignés »).</p>
+        <ul class="divide-y divide-gray-100 mb-5">${listHtml}</ul>
+        ${addBlock}`;
+    }
+
+    async function addAssignment() {
+      const userId = Number(document.getElementById('asg-user').value);
+      const note = document.getElementById('asg-note').value.trim();
+      const body = note ? { user_id: userId, note } : { user_id: userId };
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/assignments`, body);
+      if (ok && data?.success) { showToast(data.message || 'Assigné'); renderTab(); }
+      else showToast(data?.error || 'Erreur', 'error');
+    }
+
+    async function setAssignmentStatus(id, status) {
+      const { ok, data } = await KBF_API.patch(`/assignments/${id}`, { status });
+      if (ok && data?.success) showToast('Statut mis à jour');
+      else { showToast(data?.error || 'Erreur', 'error'); renderTab(); }
+    }
+
+    async function removeAssignment(userId) {
+      if (!confirm('Retirer cette assignation ?')) return;
+      const { ok, data } = await KBF_API.delete(`/forms/${formId}/assignments/${userId}`);
+      if (ok && data?.success) { showToast('Assignation retirée'); renderTab(); }
+      else showToast(data?.error || 'Erreur', 'error');
+    }
+
+    // ── M4 : Agents de terrain scopés à cette enquête ───────────────────────
+    async function renderAgents(c) {
+      const { ok, data } = await KBF_API.get(`/forms/${formId}/agents`);
+      const agents = (ok && Array.isArray(data?.agents)) ? data.agents : [];
+
+      const row = (a) => `
+        <li class="flex items-center gap-3 py-3">
+          <div class="w-9 h-9 rounded-full ${a.is_revoked ? 'bg-gray-100 text-gray-400' : 'bg-emerald-50 text-emerald-600'} flex items-center justify-center shrink-0">${kbIcon('user','w-4 h-4')}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium truncate">${escapeHtml(a.display_name)}${a.email ? ' · <span class="text-gray-400 font-normal">' + escapeHtml(a.email) + '</span>' : ''}</div>
+            <div class="text-xs text-gray-500 font-mono truncate">${escapeHtml(a.identifiant)} · ${a.response_count} réponse${a.response_count > 1 ? 's' : ''} · ${a.last_login_at ? 'connecté ' + timeAgo(a.last_login_at) : 'jamais connecté'}</div>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded-full font-medium ${a.is_revoked ? 'bg-gray-100 text-gray-500' : 'bg-emerald-100 text-emerald-700'}">${a.is_revoked ? 'Révoqué' : 'Actif'}</span>
+          <button onclick="regenerateAgentPassword(${a.id})" class="text-gray-400 hover:text-indigo-600 p-1" aria-label="Régénérer le mot de passe et le renvoyer par e-mail" title="Régénérer le mot de passe et le renvoyer par e-mail">${kbIcon('key','w-4 h-4')}</button>
+          <button onclick="toggleAgentRevoke(${a.id}, ${a.is_revoked ? 'false' : 'true'})" class="text-gray-400 hover:text-indigo-600 p-1" aria-label="${a.is_revoked ? 'Réactiver' : 'Révoquer'}">${kbIcon(a.is_revoked ? 'refresh' : 'lock', 'w-4 h-4')}</button>
+          <button onclick="deleteAgent(${a.id})" class="text-gray-400 hover:text-red-600 p-1" aria-label="Supprimer">${kbIcon('trash','w-4 h-4')}</button>
+        </li>`;
+
+      const listHtml = agents.map(row).join('') || '<li class="text-sm text-gray-400 italic py-3">Aucun agent pour l\'instant</li>';
+
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-1">Agents de terrain</h2>
+        <p class="text-sm text-gray-500 mb-4">Donnez accès à cette enquête précise à des personnes sans compte KBForms : un identifiant et un mot de passe leur sont générés. Dépublier le formulaire ou révoquer un agent coupe son accès immédiatement.</p>
+        <ul class="divide-y divide-gray-100 mb-5">${listHtml}</ul>
+        <div class="rounded-xl border border-gray-200 p-4">
+          <div class="text-sm font-medium text-gray-800 mb-3">Ajouter un agent</div>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="ag-name" placeholder="Nom de l'agent (ex. Jean Dupont)" class="fld flex-1"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('ag-email').focus();}">
+            <input id="ag-email" type="email" placeholder="Adresse e-mail" class="fld flex-1"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();addAgent();}">
+            <button onclick="addAgent()" class="btn btn-primary">Créer</button>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Les identifiants sont envoyés automatiquement à cette adresse et affichés une seule fois ici. Le mot de passe pourra être régénéré et renvoyé, mais jamais réaffiché.</p>
+        </div>`;
+    }
+
+    async function addAgent() {
+      const name  = document.getElementById('ag-name').value.trim();
+      const email = document.getElementById('ag-email').value.trim();
+      if (!name)  { showToast('Entrez un nom', 'warning'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('Entrez une adresse e-mail valide', 'warning'); return; }
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/agents`, { display_name: name, email });
+      if (ok && data?.success) {
+        showAgentCredentialsModal(data);
+        renderTab();
+      } else {
+        showToast(data?.error || 'Erreur', 'error');
+      }
+    }
+
+    async function regenerateAgentPassword(id) {
+      if (!confirm('Générer un nouveau mot de passe pour cet agent ? L\'ancien cessera immédiatement de fonctionner. Le nouveau lui sera renvoyé par e-mail.')) return;
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/agents/${id}/regenerate-password`, {});
+      if (ok && data?.success) {
+        showAgentCredentialsModal(data, true);
+        renderTab();
+      } else {
+        showToast(data?.error || 'Erreur', 'error');
+      }
+    }
+
+    function showAgentCredentialsModal(data, isReset = false) {
+      const emailLine = data.email
+        ? (data.email_sent
+            ? `<p class="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-2 mb-3">${kbIcon('mail','w-3.5 h-3.5 inline -mt-0.5 mr-1')}Envoyés par e-mail à ${escapeHtml(data.email)}.</p>`
+            : `<p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">L'e-mail à ${escapeHtml(data.email)} n'a pas pu être envoyé${data.email_error ? ' (' + escapeHtml(data.email_error) + ')' : ''}. Transmettez ces identifiants manuellement.</p>`)
+        : '';
+      const overlay = document.createElement('div');
+      overlay.className = 'fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4';
+      overlay.innerHTML = `
+        <div class="bg-white rounded-2xl shadow-lg max-w-sm w-full p-6">
+          <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3">${kbIcon('alert-tri','w-5 h-5')}</div>
+          <h3 class="font-semibold text-gray-900 mb-1">${isReset ? 'Nouveau mot de passe pour «&nbsp;' + escapeHtml(data.display_name) + '&nbsp;»' : 'Agent «&nbsp;' + escapeHtml(data.display_name) + '&nbsp;» créé'}</h3>
+          ${emailLine}
+          <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-4">Notez ${isReset ? 'ce mot de passe' : 'ces identifiants'} maintenant : ${isReset ? 'il ne sera' : 'ils ne seront'} plus jamais affiché${isReset ? '' : 's'} ici.</p>
+          <label class="field-label">Identifiant</label>
+          <div class="flex gap-2 mb-3">
+            <input readonly value="${escapeHtml(data.identifiant)}" class="fld font-mono" id="ag-cred-id">
+            <button onclick="copyToClipboard(document.getElementById('ag-cred-id').value)" class="btn btn-secondary px-3">Copier</button>
+          </div>
+          <label class="field-label">Mot de passe</label>
+          <div class="flex gap-2 mb-5">
+            <input readonly value="${escapeHtml(data.password)}" class="fld font-mono" id="ag-cred-pw">
+            <button onclick="copyToClipboard(document.getElementById('ag-cred-pw').value)" class="btn btn-secondary px-3">Copier</button>
+          </div>
+          <button onclick="this.closest('.fixed').remove()" class="btn btn-primary btn-block">J'ai noté, fermer</button>
+        </div>`;
+      document.body.appendChild(overlay);
+    }
+
+    async function toggleAgentRevoke(id, revoke) {
+      const { ok, data } = await KBF_API.patch(`/forms/${formId}/agents/${id}`, { is_revoked: revoke });
+      if (ok && data?.success) { showToast(revoke ? 'Agent révoqué' : 'Agent réactivé'); renderTab(); }
+      else showToast(data?.error || 'Erreur', 'error');
+    }
+
+    async function deleteAgent(id) {
+      if (!confirm('Supprimer définitivement cet agent ? Ses réponses déjà collectées sont conservées.')) return;
+      const { ok, data } = await KBF_API.delete(`/forms/${formId}/agents/${id}`);
+      if (ok && data?.success) { showToast('Agent supprimé'); renderTab(); }
+      else showToast(data?.error || 'Erreur', 'error');
+    }
+
+    async function renderWebhooks(c) {
+      const { data } = await KBF_API.get(`/forms/${formId}/webhooks`);
+      const list = Array.isArray(data) ? data : (data?.webhooks || []);
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-4">Webhooks</h2>
+        <ul class="divide-y divide-gray-100 mb-4">
+          ${list.map(w => `
+            <li class="py-3 flex items-center gap-3">
+              <div class="flex-1 min-w-0"><div class="text-sm font-mono truncate">${escapeHtml(w.url)}</div><div class="text-xs text-gray-500">response.created${w.secret ? ' · signé HMAC' : ''}</div></div>
+              <button onclick="toggleHook(${w.id})" class="text-xs px-2 py-1 rounded ${w.is_active?'bg-emerald-50 text-emerald-700':'bg-gray-100 text-gray-600'}">${w.is_active?'Actif':'Inactif'}</button>
+              <button onclick="deleteHook(${w.id})" class="text-red-500 text-xs">Supprimer</button>
+            </li>`).join('') || '<li class="text-sm text-gray-400 italic py-3">Aucun webhook</li>'}
+        </ul>
+        <div class="grid md:grid-cols-3 gap-2">
+          <input id="w-url" placeholder="https://…" class="fld md:col-span-2">
+          <input id="w-secret" placeholder="Secret HMAC (optionnel)" class="fld">
+          <button onclick="addHook()" class="btn btn-primary md:col-span-3">Ajouter</button>
+        </div>`;
+    }
+    async function addHook() {
+      const urlVal = document.getElementById('w-url').value.trim();
+      if (!urlVal) { showToast('L\'URL du webhook est requise', 'error'); return; }
+      if (!urlVal.startsWith('http://') && !urlVal.startsWith('https://')) {
+        showToast('L\'URL doit commencer par https:// ou http://', 'error'); return;
+      }
+      const secretVal = document.getElementById('w-secret').value.trim() || null;
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/webhooks`, { url: urlVal, secret: secretVal });
+      if (ok) { showToast('Webhook ajouté'); renderTab(); }
+      else showToast(data?.error || 'Erreur lors de l\'ajout', 'error');
+    }
+    async function deleteHook(id) { if (confirm('Supprimer ?')) { const { ok } = await KBF_API.delete(`/webhooks/${id}`); if (ok) renderTab(); } }
+    async function toggleHook(id) { const { ok } = await KBF_API.put(`/webhooks/${id}/toggle`, {}); if (ok) renderTab(); }
+
+    const OP_LABELS = { eq: 'est égal à', neq: 'est différent de', contains: 'contient' };
+
+    async function renderLogic(c) {
+      const [conds, qs, secs] = await Promise.all([
+        KBF_API.get(`/forms/${formId}/conditions`),
+        KBF_API.get(`/forms/${formId}/questions`),
+        KBF_API.get(`/forms/${formId}/sections`)
+      ]);
+      const list      = Array.isArray(conds.data) ? conds.data : (conds.data?.conditions || []);
+      const questions = Array.isArray(qs.data)    ? qs.data    : (qs.data?.questions   || []);
+      const sections  = Array.isArray(secs.data)  ? secs.data  : (secs.data?.sections  || []);
+      const qLabel = id => { const q = questions.find(x => Number(x.id) === Number(id)); return q ? truncate(q.label, 40) : `#${id}`; };
+      const sTitle = id => { const s = sections.find(x => Number(x.id) === Number(id)); return s ? (s.title || `Section #${id}`) : `#${id}`; };
+
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-1">Logique conditionnelle</h2>
+        <p class="text-sm text-gray-500 mb-4">Une section listée ici n'est affichée que si au moins une de ses règles est vérifiée.</p>
+        <ul class="space-y-2 mb-4">
+          ${list.map(cd => `<li class="flex items-center gap-2 p-3 border border-gray-200 rounded-lg text-sm">
+            <span>Si «&nbsp;${escapeHtml(qLabel(cd.source_question_id))}&nbsp;» ${OP_LABELS[cd.operator] || cd.operator} "${escapeHtml(cd.value)}" → afficher «&nbsp;${escapeHtml(sTitle(cd.target_section_id))}&nbsp;»</span>
+            <button onclick="delCond(${cd.id})" class="ml-auto text-red-500 text-xs shrink-0">Supprimer</button></li>`).join('') || '<li class="text-sm text-gray-400 italic">Aucune condition</li>'}
+        </ul>
+        ${questions.length && sections.length ? `
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+          <select id="l-q" class="fld">${questions.map(q => `<option value="${q.id}">${escapeHtml(truncate(q.label,30))}</option>`).join('')}</select>
+          <select id="l-op" class="fld">${Object.entries(OP_LABELS).map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}</select>
+          <input id="l-val" placeholder="Valeur" class="fld">
+          <select id="l-sec" class="fld">${sections.map(s => `<option value="${s.id}">${escapeHtml(truncate(s.title || ('Section #'+s.id),30))}</option>`).join('')}</select>
+          <button onclick="addCond()" class="btn btn-primary">Ajouter</button>
+        </div>` : '<p class="text-sm text-amber-600">Ajoutez au moins une question et une section pour créer des règles.</p>'}`;
+    }
+    async function addCond() {
+      const value = document.getElementById('l-val').value.trim();
+      if (!value) { showToast('Entrez une valeur', 'error'); return; }
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/conditions`, {
+        source_question_id: Number(document.getElementById('l-q').value),
+        operator:           document.getElementById('l-op').value,
+        value,
+        target_section_id:  Number(document.getElementById('l-sec').value)
+      });
+      if (ok) { showToast('Règle ajoutée'); renderTab(); }
+      else showToast(data?.error || 'Erreur', 'error');
+    }
+    async function delCond(id) { if (confirm('Supprimer ?')) { const { ok } = await KBF_API.delete(`/conditions/${id}`); if (ok) renderTab(); } }
+
+    async function renderSections(c) {
+      const { data } = await KBF_API.get(`/forms/${formId}/sections`);
+      const list = Array.isArray(data) ? data : (data?.sections || []);
+      c.innerHTML = `
+        <h2 class="font-semibold text-lg mb-4">Sections</h2>
+        <ul id="sect-list" class="space-y-2 mb-4">
+          ${list.map(s => `<li data-id="${s.id}" class="flex items-center gap-3 p-3 border border-gray-200 rounded-lg cursor-grab"><span class="text-gray-400">⋮⋮</span><span class="flex-1 text-sm" id="sec-label-${s.id}">${escapeHtml(s.title)}</span><button onclick="renameSection(${s.id}, '${escapeHtml(s.title)}')" class="text-indigo-600 text-xs font-medium mr-2">Renommer</button><button onclick="delSection(${s.id})" class="text-red-500 text-xs">Supprimer</button></li>`).join('') || '<li class="text-sm text-gray-400 italic">Aucune section</li>'}
+        </ul>
+        <div class="flex gap-2">
+          <input id="sec-title" placeholder="Nouvelle section" class="fld flex-1">
+          <button onclick="addSection()" class="btn btn-primary">Ajouter</button>
+        </div>`;
+      if (window.Sortable) Sortable.create(document.getElementById('sect-list'), { animation: 150 });
+    }
+    async function addSection() {
+      const title = document.getElementById('sec-title').value.trim(); if (!title) return;
+      const position = document.querySelectorAll('#sect-list li[data-id]').length;
+      const { ok } = await KBF_API.post(`/forms/${formId}/sections`, { title, position });
+      if (ok) { showToast('Ajoutée'); renderTab(); }
+    }
+    async function delSection(id) { if (confirm('Supprimer ?')) { const { ok } = await KBF_API.delete(`/sections/${id}`); if (ok) renderTab(); } }
+    async function renameSection(id, current) {
+      const newTitle = prompt('Nouveau nom de la section :', current);
+      if (!newTitle || newTitle.trim() === current) return;
+      const { ok } = await KBF_API.put(`/sections/${id}`, { title: newTitle.trim() });
+      if (ok) { showToast('Section renommée'); renderTab(); }
+      else showToast('Erreur lors du renommage', 'error');
+    }
+
+    // ── Google Sheets ─────────────────────────────────────────────────────────
+    async function renderSheets(c) {
+      c.innerHTML = '<div class="kb-skeleton h-48"></div>';
+
+      const { ok, data } = await KBF_API.get(`/forms/${formId}/sheets`);
+      const sheet = ok ? (data?.sheet || data) : null;
+      const connected = ok && sheet?.spreadsheet_id;
+      const saEmail = data?.service_account_email || null;
+      const configured = data?.configured !== false && !!saEmail;
+
+      c.innerHTML = `
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="font-semibold text-lg">Google Sheets</h2>
+            <p class="text-sm text-gray-500 mt-0.5">Synchronisez automatiquement les réponses vers un Google Sheet.</p>
+          </div>
+          <span class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full ${connected ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}">
+            <span class="w-2 h-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-gray-400'}"></span>
+            ${connected ? 'Connecté' : 'Non connecté'}
+          </span>
+        </div>
+
+        ${!configured ? `
+          <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-4 text-sm text-amber-800">
+            L'intégration Google Sheets n'est pas encore configurée sur ce serveur
+            (compte de service manquant : <code>app/config/google-sheets.php</code>).
+          </div>` : ''}
+        ${connected ? renderSheetsConnected(sheet) : renderSheetsDisconnected(saEmail)}
+      `;
+    }
+
+    function renderSheetsDisconnected(saEmail) {
+      return `
+        <div class="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center">
+          <div class="flex justify-center mb-3 text-gray-300">${kbIcon('table','w-10 h-10')}</div>
+          <h3 class="font-semibold text-gray-800 mb-1">Aucun Google Sheet connecté</h3>
+          <p class="text-sm text-gray-500 mb-5 max-w-sm mx-auto">Connectez un Google Sheet pour exporter et synchroniser les réponses automatiquement dès leur soumission.</p>
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <button onclick="sheetsLinkExisting()"
+              class="inline-flex items-center gap-2 btn btn-primary">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.7"/></svg>
+              Lier un Sheet existant
+            </button>
+            <button onclick="sheetsCreate()"
+              class="inline-flex items-center gap-2 btn btn-secondary">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+              Créer un nouveau Sheet
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-4 max-w-md mx-auto">« Créer un nouveau Sheet » nécessite un compte Google&nbsp;Workspace. Avec une adresse Gmail personnelle, créez le Sheet vous-même dans Google&nbsp;Drive puis utilisez « Lier un Sheet existant ».</p>
+        </div>
+        <div id="sheets-link-form" class="hidden mt-4 p-4 border border-gray-200 rounded-xl">
+          <label class="block text-sm font-medium mb-1">URL ou ID du Google Sheet</label>
+          <div class="flex gap-2">
+            <input id="sheets-url-input" type="text" placeholder="https://docs.google.com/spreadsheets/d/…"
+              class="fld flex-1">
+            <button onclick="sheetsConfirmLink()"
+              class="btn btn-primary">
+              Lier
+            </button>
+            <button onclick="document.getElementById('sheets-link-form').classList.add('hidden')"
+              class="bg-white border border-gray-200 text-gray-600 text-sm font-medium px-3 py-2 rounded-lg">
+              Annuler
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">Partagez d'abord ce Sheet (droit <b>Éditeur</b>) avec l'adresse du compte de service :</p>
+          ${saEmail
+            ? `<div class="mt-1 flex items-center gap-2"><code class="text-xs bg-gray-100 rounded px-2 py-1 select-all">${escapeHtml(saEmail)}</code><button onclick="navigator.clipboard.writeText('${escapeHtml(saEmail)}');showToast('Adresse copiée')" class="text-xs text-indigo-600 font-medium">Copier</button></div>`
+            : `<p class="text-xs text-amber-600 mt-1">Compte de service non configuré côté serveur.</p>`}
+        </div>`;
+    }
+
+    function renderSheetsConnected(sheet) {
+      const syncLabel = sheet?.auto_sync ? 'Sync auto activée' : 'Sync auto désactivée';
+      const syncColor = sheet?.auto_sync ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600 bg-gray-100';
+      const lastSync  = sheet?.last_synced_at
+        ? new Date(sheet.last_synced_at).toLocaleString('fr-FR')
+        : 'Jamais synchronisé';
+      return `
+        <div class="border border-gray-200 rounded-xl p-4 mb-4 flex items-start gap-4">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">${kbIcon('table','w-5 h-5')}</div>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium text-gray-900 truncate">${escapeHtml(sheet.spreadsheet_title || 'Google Sheet')}</div>
+            <div class="text-xs text-gray-500 mt-0.5 truncate font-mono">${escapeHtml(sheet.spreadsheet_id)}</div>
+            <div class="text-xs text-gray-400 mt-1">Dernière sync : ${escapeHtml(lastSync)}</div>
+          </div>
+          <a href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheet.spreadsheet_id)}" target="_blank"
+            class="text-xs text-indigo-600 hover:underline shrink-0 inline-flex items-center gap-1">Ouvrir ${kbIcon('external','w-3 h-3')}</a>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+          <button onclick="sheetsExport()"
+            class="flex items-center gap-2 justify-center border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-lg">
+            <svg class="w-4 h-4 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Exporter toutes les réponses
+          </button>
+          <button onclick="sheetsExportAppend()"
+            class="flex items-center gap-2 justify-center border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-lg">
+            <svg class="w-4 h-4 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Ajouter les nouvelles réponses
+          </button>
+          <button onclick="sheetsImport()"
+            class="flex items-center gap-2 justify-center border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-lg">
+            <svg class="w-4 h-4 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Importer depuis le Sheet
+          </button>
+          <button onclick="sheetsToggleAutoSync(${sheet.auto_sync ? 0 : 1})"
+            class="flex items-center gap-2 justify-center border border-gray-200 hover:bg-gray-50 text-sm font-medium px-4 py-2.5 rounded-lg ${syncColor}">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            ${syncLabel}
+          </button>
+        </div>
+
+        <div class="border-t border-gray-100 pt-4">
+          <button onclick="sheetsDisconnect()"
+            class="text-sm text-red-600 hover:text-red-700 font-medium flex items-center gap-1">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 11-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+            Déconnecter ce Google Sheet
+          </button>
+        </div>`;
+    }
+
+    async function sheetsCreate() {
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Création…';
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/sheets/create`, {});
+      if (ok) {
+        showToast('Google Sheet créé et connecté !');
+        renderTab();
+      } else {
+        showToast(data?.error || 'Erreur lors de la création', 'error');
+        btn.disabled = false;
+        btn.textContent = 'Créer un nouveau Sheet';
+      }
+    }
+
+    function sheetsLinkExisting() {
+      document.getElementById('sheets-link-form')?.classList.remove('hidden');
+      document.getElementById('sheets-url-input')?.focus();
+    }
+
+    async function sheetsConfirmLink() {
+      const raw = document.getElementById('sheets-url-input')?.value.trim();
+      if (!raw) { showToast('Entrez une URL ou un ID de Sheet', 'error'); return; }
+      const match = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+      const spreadsheetId = match ? match[1] : raw;
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/sheets/link`, { spreadsheet_id: spreadsheetId });
+      if (ok) {
+        showToast('Sheet lié avec succès');
+        renderTab();
+      } else {
+        showToast(data?.error || 'Impossible de lier ce Sheet', 'error');
+      }
+    }
+
+    async function sheetsExport() {
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/sheets/export`, {});
+      showToast(ok ? `Export réussi (${data?.rows_written ?? '?'} lignes écrites)` : (data?.error || 'Erreur export'), ok ? 'success' : 'error');
+      if (ok) renderTab();
+    }
+
+    async function sheetsExportAppend() {
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/sheets/export/append`, {});
+      showToast(ok ? `${data?.rows_appended ?? '?'} nouvelles lignes ajoutées` : (data?.error || 'Erreur'), ok ? 'success' : 'error');
+      if (ok) renderTab();
+    }
+
+    async function sheetsImport() {
+      if (!confirm('Importer les données du Sheet dans KBForms ? Les réponses existantes ne seront pas écrasées.')) return;
+      const { ok, data } = await KBF_API.post(`/forms/${formId}/sheets/import`, {});
+      showToast(ok ? `${data?.rows_imported ?? '?'} réponses importées` : (data?.error || 'Erreur import'), ok ? 'success' : 'error');
+    }
+
+    async function sheetsToggleAutoSync(enabled) {
+      const { ok } = await KBF_API.post(`/forms/${formId}/sheets/link`, { auto_sync: !!enabled });
+      showToast(ok ? (enabled ? 'Sync auto activée' : 'Sync auto désactivée') : 'Erreur', ok ? 'success' : 'error');
+      if (ok) renderTab();
+    }
+
+    async function sheetsDisconnect() {
+      if (!confirm('Déconnecter ce Google Sheet ? Les réponses dans KBForms ne seront pas supprimées.')) return;
+      const { ok } = await KBF_API.delete(`/forms/${formId}/sheets`);
+      showToast(ok ? 'Sheet déconnecté' : 'Erreur lors de la déconnexion', ok ? 'success' : 'error');
+      if (ok) renderTab();
+    }
+  </script>
+</body>
+</html>

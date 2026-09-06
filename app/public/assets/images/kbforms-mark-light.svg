@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="KBForms">
+  <rect width="40" height="40" rx="11.5" fill="#fff"/>
+  <g fill="none" stroke="#4F46E5" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 10.5v19"/>
+    <path d="M8 20 15.5 12.4"/>
+    <path d="M8 20 16.3 29.5"/>
+    <path d="M22.5 10.5v19"/>
+    <path d="M22.5 10.5h4.4a4.4 4.4 0 0 1 0 8.8H22.5"/>
+    <path d="M22.5 19.3h5.1a4.9 4.9 0 0 1 0 9.8H22.5"/>
+  </g>
+  <circle cx="17.2" cy="10.6" r="2.5" fill="#4F46E5"/>
+</svg>

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rôles & Permissions · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-6xl w-full mx-auto animate-fade-in">
+
+      <!-- Tabs -->
+      <div class="seg mb-6" role="tablist">
+        <button id="tab-roles" onclick="switchTab('roles')" class="seg-item is-active inline-flex items-center gap-1.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/></svg>
+          Rôles
+        </button>
+        <button id="tab-assign" onclick="switchTab('assign')" class="seg-item inline-flex items-center gap-1.5">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20c0-3 2.5-5 5.5-5s5.5 2 5.5 5"/><path d="M16 5.5a3.2 3.2 0 0 1 0 6M17.5 20c0-2.4-1-4-2.5-4.6"/></svg>
+          Utilisateurs
+        </button>
+      </div>
+
+      <!-- ═══ TAB RÔLES ═══ -->
+      <div id="pane-roles">
+        <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+
+          <!-- Liste des rôles -->
+          <section class="bg-white border border-gray-200 rounded-2xl shadow-sm p-4">
+            <div class="flex items-center justify-between mb-3">
+              <h2 class="font-semibold text-gray-800 text-sm">Rôles</h2>
+              <button onclick="openAddRole()" class="btn btn-primary btn-sm text-xs">
+                + Nouveau
+              </button>
+            </div>
+            <ul id="roles-list" class="space-y-1">
+              <li class="kb-skeleton h-10 rounded-lg"></li>
+              <li class="kb-skeleton h-10 rounded-lg mt-1"></li>
+              <li class="kb-skeleton h-10 rounded-lg mt-1"></li>
+            </ul>
+          </section>
+
+          <!-- Détail du rôle sélectionné -->
+          <section class="bg-white border border-gray-200 rounded-2xl shadow-sm p-5">
+            <div id="role-detail">
+              <div class="text-center py-12 text-gray-400">
+                <div class="flex justify-center mb-2 text-gray-300"><svg class="w-10 h-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z"/></svg></div>
+                <p class="text-sm">Sélectionnez un rôle pour voir ses permissions</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Modale ajout rôle custom -->
+        <div id="modal-add-role" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+          <div class="absolute inset-0 bg-black/30" onclick="closeAddRole()"></div>
+          <div class="relative bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm z-10">
+            <h3 class="font-semibold text-gray-800 mb-4">Créer un rôle custom</h3>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Nom du rôle</label>
+            <input id="new-role-name" type="text" placeholder="ex: moderator, manager…"
+              class="fld mb-4" />
+            <div class="flex gap-2 justify-end">
+              <button onclick="closeAddRole()" class="btn btn-secondary btn-sm">Annuler</button>
+              <button onclick="createRole()" class="btn btn-primary btn-sm">Créer</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ TAB UTILISATEURS ═══ -->
+      <div id="pane-assign" class="hidden">
+        <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+          <div class="p-5 border-b border-gray-100 flex flex-col md:flex-row md:items-center gap-3 justify-between">
+            <div>
+              <h2 class="font-semibold text-gray-800">Assignation des rôles</h2>
+              <p class="text-xs text-gray-500 mt-0.5">Cliquez sur le rôle d'un utilisateur pour le modifier</p>
+            </div>
+            <div class="relative w-full md:w-56">
+              <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input id="user-search" oninput="filterUsers()" type="text" placeholder="Rechercher…"
+                class="fld pl-9" />
+            </div>
+          </div>
+          <div id="users-list" class="divide-y divide-gray-50">
+            <div class="p-8 text-center text-gray-400">
+              <div class="kb-skeleton h-14 rounded-lg mb-2"></div>
+              <div class="kb-skeleton h-14 rounded-lg mb-2"></div>
+              <div class="kb-skeleton h-14 rounded-lg"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    let roles = [], permissions = [], users = [], allUsers = [];
+    let selectedRoleId = null;
+    const currentUser = KBF_AUTH.getUser();
+
+    // ── Accès réservé admin + enterprise ─────────────────────────────────────
+    if (!KBF_AUTH.requireAuth()) {
+      // requireAuth redirige si non connecté
+    } else if (!['admin','enterprise'].includes(currentUser?.account_type)) {
+      document.querySelector('main').innerHTML = `
+        <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-8 text-center">
+          <div class="flex justify-center mb-3 text-gray-300">${kbIcon('lock','w-10 h-10')}</div>
+          <p class="text-gray-600 font-medium">Accès réservé aux administrateurs et comptes entreprise.</p>
+          <a href="/dashboard" class="text-indigo-600 text-sm mt-3 inline-flex items-center gap-1">${kbIcon('arrow-left','w-3.5 h-3.5')} Retour au dashboard</a>
+        </div>`;
+    } else {
+      renderSidebar('roles');
+      renderTopBar({ title: 'Rôles & Permissions' });
+      loadAll();
+    }
+
+    // ── Tab switcher ──────────────────────────────────────────────────────────
+    function switchTab(tab) {
+      ['roles','assign'].forEach(t => {
+        document.getElementById('tab-' + t).className = 'seg-item inline-flex items-center gap-1.5' + (t === tab ? ' is-active' : '');
+        document.getElementById('pane-' + t).classList.toggle('hidden', t !== tab);
+      });
+      if (tab === 'assign' && users.length === 0) loadUsers();
+    }
+
+    // ── Chargement initial ────────────────────────────────────────────────────
+    async function loadAll() {
+      const [r, p] = await Promise.all([
+        KBF_API.get('/roles'),
+        KBF_API.get('/permissions')
+      ]);
+      roles       = Array.isArray(r.data) ? r.data : [];
+      permissions = Array.isArray(p.data) ? p.data : [];
+      renderRolesList();
+    }
+
+    async function loadUsers() {
+      const { ok, data } = await KBF_API.get('/users');
+      if (!ok) { showToast('Erreur de chargement des utilisateurs', 'error'); return; }
+      allUsers = Array.isArray(data) ? data : [];
+      users = [...allUsers];
+      renderUsersList();
+    }
+
+    // ── TAB RÔLES ─────────────────────────────────────────────────────────────
+    function renderRolesList() {
+      const el = document.getElementById('roles-list');
+      if (!roles.length) {
+        el.innerHTML = '<li class="text-sm text-gray-400 italic px-2 py-3">Aucun rôle</li>';
+        return;
+      }
+      el.innerHTML = roles.map(r => {
+        const isDefault = r.is_default;
+        const badge = isDefault
+          ? `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">Défaut</span>`
+          : `<span class="text-xs px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500">Custom</span>`;
+        const dot = r.name === 'admin'  ? 'bg-red-400' :
+                    r.name === 'editor' ? 'bg-indigo-400' :
+                    r.name === 'viewer' ? 'bg-gray-300' : 'bg-green-400';
+        return `<li>
+          <button onclick="selectRole(${r.id})"
+            class="w-full text-left px-3 py-2.5 rounded-xl text-sm flex items-center gap-2 transition-colors
+              ${selectedRoleId === r.id ? 'bg-indigo-50 text-indigo-700 font-medium' : 'hover:bg-gray-50 text-gray-700'}">
+            <span class="w-2 h-2 rounded-full ${dot} shrink-0"></span>
+            <span class="flex-1">${escapeHtml(r.name)}</span>
+            ${badge}
+            <span class="text-xs text-gray-400">${(r.permissions||[]).length}</span>
+          </button>
+        </li>`;
+      }).join('');
+    }
+
+    function selectRole(id) {
+      selectedRoleId = id;
+      renderRolesList();
+      const r = roles.find(x => x.id === id);
+      if (!r) return;
+
+      const isDefault = r.is_default;
+      const granted = new Set((r.permissions || []).map(p => p.id));
+
+      const permGroups = groupPermissions(permissions);
+
+      document.getElementById('role-detail').innerHTML = `
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <h2 class="font-semibold text-gray-800">${escapeHtml(r.name)}</h2>
+            ${isDefault
+              ? `<span class="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">Rôle prédéfini — protégé</span>`
+              : `<span class="text-xs px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded-full">Rôle custom</span>`}
+          </div>
+          ${!isDefault ? `<button onclick="deleteRole(${r.id})" class="text-xs text-red-500 hover:text-red-700 border border-red-200 px-2 py-1 rounded-lg">Supprimer</button>` : ''}
+        </div>
+
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-xs font-semibold uppercase text-gray-400 tracking-wide">Catalogue des permissions</p>
+          <div class="flex gap-1.5">
+            <input id="new-perm-name" placeholder="ex: forms.export" class="fld text-xs !py-1.5 !px-2 w-40"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();createPermission();}">
+            <button onclick="createPermission()" class="btn btn-secondary btn-sm text-xs shrink-0">+ Nouvelle permission</button>
+          </div>
+        </div>
+        <div class="space-y-4">
+          ${Object.entries(permGroups).map(([group, perms]) => `
+            <div>
+              <p class="text-xs font-semibold uppercase text-gray-400 tracking-wide mb-2">${group}</p>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-1">
+                ${perms.map(p => `
+                  <div class="flex items-center gap-1">
+                    <label class="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer hover:bg-gray-50
+                      ${isDefault ? 'opacity-70 cursor-default' : ''}">
+                      <input type="checkbox" class="kb-checkbox"
+                        ${granted.has(p.id) ? 'checked' : ''}
+                        ${isDefault ? 'disabled' : `onchange="togglePerm(${r.id}, ${p.id}, this.checked)"`}>
+                      <div>
+                        <span class="text-sm text-gray-700 font-medium">${escapeHtml(p.name)}</span>
+                      </div>
+                    </label>
+                    <button onclick="renamePermission(${p.id}, '${escapeHtml(p.name).replace(/'/g, "&#39;")}')" class="text-gray-300 hover:text-indigo-600 p-1 shrink-0" title="Renommer la permission">${kbIcon('pencil','w-3.5 h-3.5')}</button>
+                    <button onclick="deletePermission(${p.id})" class="text-gray-300 hover:text-red-600 p-1 shrink-0" title="Supprimer la permission">${kbIcon('x','w-3.5 h-3.5')}</button>
+                  </div>`).join('')}
+              </div>
+            </div>`).join('')}
+        </div>
+        ${isDefault ? `
+          <div class="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-700 flex gap-2">
+            <span class="shrink-0 mt-0.5">${kbIcon('alert-tri','w-3.5 h-3.5')}</span>
+            <span>Les rôles prédéfinis (admin, editor, viewer) sont protégés. Leurs permissions ne peuvent pas être modifiées. Créez un rôle custom pour personnaliser les accès.</span>
+          </div>` : ''}`;
+    }
+
+    // Grouper les permissions par préfixe (forms.*, users.*, etc.)
+    function groupPermissions(perms) {
+      const groups = {};
+      perms.forEach(p => {
+        const prefix = p.name.includes('.') ? p.name.split('.')[0] : 'Autre';
+        const labels = {
+          forms: 'Formulaires', users: 'Utilisateurs',
+          responses: 'Réponses', roles: 'Rôles',
+          analytics: 'Analytics', settings: 'Paramètres'
+        };
+        const group = labels[prefix] || prefix;
+        if (!groups[group]) groups[group] = [];
+        groups[group].push(p);
+      });
+      return groups;
+    }
+
+    async function togglePerm(roleId, permId, granted) {
+      const { ok } = await KBF_API.post('/roles/permissions/assign', {
+        role_id: roleId, permission_id: permId, granted
+      });
+      if (ok) {
+        const role = roles.find(r => r.id === roleId);
+        if (role) {
+          if (granted) {
+            const perm = permissions.find(p => p.id === permId);
+            if (perm && !role.permissions.find(p => p.id === permId)) role.permissions.push(perm);
+          } else {
+            role.permissions = role.permissions.filter(p => p.id !== permId);
+          }
+          renderRolesList();
+        }
+      } else showToast('Erreur', 'error');
+    }
+
+    // ── Catalogue des permissions (créer / renommer / supprimer) ────────────
+    async function refreshPermissionsAndRerender() {
+      const { data } = await KBF_API.get('/permissions');
+      permissions = Array.isArray(data) ? data : [];
+      // Les rôles gardent leur propre sous-liste `permissions` (issue de /roles) ;
+      // on la recharge aussi pour rester cohérent après un renommage/suppression.
+      const { data: rData } = await KBF_API.get('/roles');
+      roles = Array.isArray(rData) ? rData : roles;
+      renderRolesList();
+      if (selectedRoleId) selectRole(selectedRoleId);
+    }
+    async function createPermission() {
+      const nameEl = document.getElementById('new-perm-name');
+      const name = nameEl.value.trim();
+      if (!name) { showToast('Entrez un nom de permission', 'warning'); return; }
+      const { ok, data } = await KBF_API.post('/permissions', { name });
+      if (ok && data?.success) { showToast('Permission créée'); nameEl.value = ''; await refreshPermissionsAndRerender(); }
+      else showToast(data?.error || 'Erreur', 'error');
+    }
+    async function renamePermission(id, current) {
+      const name = prompt('Nouveau nom de la permission :', current);
+      if (!name || name.trim() === current) return;
+      const { ok, data } = await KBF_API.put(`/permissions/${id}`, { name: name.trim() });
+      if (ok && data?.success !== false) { showToast('Permission renommée'); await refreshPermissionsAndRerender(); }
+      else showToast('Erreur', 'error');
+    }
+    async function deletePermission(id) {
+      if (!confirm('Supprimer cette permission ? Elle sera retirée de tous les rôles.')) return;
+      const { ok, data } = await KBF_API.delete(`/permissions/${id}`);
+      if (ok && data?.success !== false) { showToast('Permission supprimée'); await refreshPermissionsAndRerender(); }
+      else showToast('Erreur', 'error');
+    }
+
+    function openAddRole()  { document.getElementById('modal-add-role').classList.remove('hidden'); document.getElementById('new-role-name').focus(); }
+    function closeAddRole() { document.getElementById('modal-add-role').classList.add('hidden'); document.getElementById('new-role-name').value = ''; }
+
+    async function createRole() {
+      const name = document.getElementById('new-role-name').value.trim();
+      if (!name) { showToast('Entrez un nom de rôle', 'warning'); return; }
+      if (roles.find(r => r.name === name)) { showToast('Ce rôle existe déjà', 'warning'); return; }
+      const { ok } = await KBF_API.post('/roles', { name });
+      if (ok) { showToast('Rôle créé'); closeAddRole(); loadAll(); }
+      else showToast('Erreur', 'error');
+    }
+
+    async function deleteRole(id) {
+      if (!confirm('Supprimer ce rôle ? Les utilisateurs avec ce rôle le perdront.')) return;
+      const { ok } = await KBF_API.delete(`/roles/${id}`);
+      if (ok) {
+        selectedRoleId = null;
+        document.getElementById('role-detail').innerHTML = '<div class="text-center py-12 text-gray-400"><div class="flex justify-center mb-2 text-gray-300">' + kbIcon('shield','w-10 h-10') + '</div><p class="text-sm">Sélectionnez un rôle</p></div>';
+        showToast('Rôle supprimé');
+        loadAll();
+      } else showToast('Impossible de supprimer un rôle prédéfini', 'error');
+    }
+
+    // ── TAB UTILISATEURS ──────────────────────────────────────────────────────
+    function renderUsersList() {
+      const el = document.getElementById('users-list');
+      if (!users.length) {
+        el.innerHTML = `<div class="p-8 text-center text-gray-400">
+          <div class="flex justify-center mb-2 text-gray-300">${kbIcon('users','w-9 h-9')}</div>
+          <p class="text-sm">Aucun utilisateur trouvé</p>
+        </div>`;
+        return;
+      }
+      el.innerHTML = users.map(u => {
+        const name = `${escapeHtml(u.first_name || '')} ${escapeHtml(u.last_name || '')}`.trim() || 'Sans nom';
+        const initials = (u.first_name?.[0] || '') + (u.last_name?.[0] || '');
+        const roleBadgeClass = u.role_name === 'admin'  ? 'bg-red-100 text-red-700' :
+                               u.role_name === 'editor' ? 'bg-indigo-100 text-indigo-700' :
+                               u.role_name === 'viewer' ? 'bg-gray-100 text-gray-600' :
+                               u.role_name             ? 'bg-green-100 text-green-700' :
+                                                          'bg-gray-50 text-gray-400';
+        const accountBadge = u.account_type === 'enterprise'
+          ? '<span class="text-xs px-1.5 py-0.5 bg-amber-50 text-amber-600 rounded">Entreprise</span>'
+          : '<span class="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">Particulier</span>';
+
+        return `<div class="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50 transition-colors">
+          <div class="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-semibold shrink-0">
+            ${escapeHtml(initials.toUpperCase() || '?')}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-gray-800 truncate">${name}</span>
+              ${accountBadge}
+            </div>
+            <p class="text-xs text-gray-400 truncate">${escapeHtml(u.email)}</p>
+          </div>
+          <div class="shrink-0">
+            <select onchange="assignRole(${u.id}, this.value, this)"
+              class="text-xs px-2 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 ${roleBadgeClass}">
+              <option value="">— Aucun rôle —</option>
+              ${roles.map(r => `<option value="${r.id}" ${u.role_id == r.id ? 'selected' : ''}>${escapeHtml(r.name)}</option>`).join('')}
+            </select>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function assignRole(userId, roleId, selectEl) {
+      if (!roleId) return;
+      const { ok, data } = await KBF_API.post('/roles/assign', {
+        user_id: userId,
+        role_id: Number(roleId)
+      });
+      if (ok) {
+        // Mettre à jour le cache local
+        const user = allUsers.find(u => u.id === userId);
+        if (user) {
+          const role = roles.find(r => r.id === Number(roleId));
+          user.role_id   = Number(roleId);
+          user.role_name = role?.name || null;
+          // Feedback visuel sur le select
+          selectEl.className = `text-xs px-2 py-1.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+            role?.name === 'admin'  ? 'bg-red-100 text-red-700' :
+            role?.name === 'editor' ? 'bg-indigo-100 text-indigo-700' :
+            role?.name === 'viewer' ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-700'
+          }`;
+        }
+        showToast('Rôle assigné');
+      } else {
+        showToast(data?.error || 'Erreur lors de l\'assignation', 'error');
+        loadUsers(); // Recharger pour corriger l'état
+      }
+    }
+
+    function filterUsers() {
+      const q = document.getElementById('user-search').value.toLowerCase();
+      users = q
+        ? allUsers.filter(u =>
+            (u.first_name + ' ' + u.last_name + ' ' + u.email + ' ' + (u.role_name||'')).toLowerCase().includes(q))
+        : [...allUsers];
+      renderUsersList();
+    }
+  </script>
+</body>
+</html>

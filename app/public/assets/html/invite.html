@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invitation · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-gray-50">
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <main class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white border border-gray-200 rounded-2xl shadow-sm p-8">
+      <div class="flex items-center justify-center gap-2 mb-6">
+        <img src="/assets/images/kbforms-mark.svg" alt="" class="w-9 h-9">
+        <span class="text-lg font-extrabold tracking-tight" style="font-family:'Plus Jakarta Sans'">KBForms</span>
+      </div>
+      <div id="inv-body" class="text-center">
+        <div class="kb-skeleton h-24 rounded-xl"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script>
+    const token = getQueryParam('token');
+    const body = document.getElementById('inv-body');
+    const ROLE_FR = { viewer: 'lecture seule', editor: 'édition', admin: 'administration' };
+
+    function esc(s) { return escapeHtml(String(s ?? '')); }
+    function tmpl(icon, title, text, actionsHtml) {
+      body.innerHTML = `
+        <div class="mx-auto w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">${icon}</div>
+        <h1 class="text-lg font-semibold text-gray-900">${title}</h1>
+        <p class="text-sm text-gray-500 mt-1.5">${text}</p>
+        <div class="mt-6 flex flex-col gap-2">${actionsHtml}</div>`;
+    }
+
+    (async () => {
+      if (!token) { tmpl(kbIcon('alert-tri','w-6 h-6'), 'Lien invalide', "Ce lien d'invitation est incomplet.", `<a href="/login" class="btn btn-secondary btn-block">Aller à la connexion</a>`); return; }
+
+      const { ok, data } = await KBF_API.get(`/invitations/${token}`);
+      if (!ok || !data?.success) {
+        tmpl(kbIcon('x','w-6 h-6'), 'Invitation introuvable', data?.error || "Cette invitation n'existe plus.", `<a href="/login" class="btn btn-secondary btn-block">Aller à la connexion</a>`);
+        return;
+      }
+
+      const inv = data;
+      const roleFr = ROLE_FR[inv.role] || inv.role;
+      const who = inv.inviter_name ? esc(inv.inviter_name) : 'Un utilisateur de KBForms';
+      const ctx = `<strong>${who}</strong> vous invite à collaborer sur <strong>« ${esc(inv.form_title)} »</strong> avec le rôle <strong>${esc(roleFr)}</strong>.`;
+
+      if (inv.status === 'accepted') {
+        tmpl(kbIcon('check','w-6 h-6'), 'Invitation déjà acceptée', ctx,
+          `<a href="/form-builder?id=${inv.form_id}" class="btn btn-primary btn-block">Ouvrir le formulaire</a>`);
+        return;
+      }
+
+      const authed = KBF_AUTH.getToken() && !KBF_AUTH.isTokenExpired(KBF_AUTH.getToken());
+      const me = authed ? KBF_AUTH.getUser() : null;
+      const myEmail = (me?.email || '').toLowerCase();
+
+      if (!authed) {
+        const next = encodeURIComponent('/invite?token=' + token);
+        tmpl(kbIcon('mail','w-6 h-6'),
+          'Vous êtes invité·e à collaborer',
+          `${ctx}<br><br>Connectez-vous ou créez un compte avec l'adresse <strong>${esc(inv.email)}</strong> pour accepter.`,
+          `<a href="/login?next=${next}&email=${encodeURIComponent(inv.email)}" class="btn btn-primary btn-block">Se connecter / créer un compte</a>`);
+        return;
+      }
+
+      if (myEmail !== inv.email.toLowerCase()) {
+        tmpl(kbIcon('alert-tri','w-6 h-6'),
+          'Mauvais compte',
+          `${ctx}<br><br>Cette invitation est destinée à <strong>${esc(inv.email)}</strong>, mais vous êtes connecté·e en tant que <strong>${esc(me.email)}</strong>.`,
+          `<button onclick="switchAccount()" class="btn btn-secondary btn-block">Changer de compte</button>`);
+        return;
+      }
+
+      tmpl(kbIcon('mail','w-6 h-6'), 'Rejoindre le formulaire', ctx,
+        `<button id="accept-btn" onclick="accept()" class="btn btn-primary btn-block">Accepter l'invitation</button>
+         <a href="/dashboard" class="btn btn-ghost btn-block">Plus tard</a>`);
+    })();
+
+    async function accept() {
+      const btn = document.getElementById('accept-btn');
+      btn.disabled = true; btn.textContent = 'Un instant…';
+      const { ok, data } = await KBF_API.post(`/invitations/${token}/accept`, {});
+      if (ok && data?.success) {
+        showToast('Vous avez rejoint le formulaire');
+        location.href = `/form-builder?id=${data.form_id}`;
+      } else {
+        btn.disabled = false; btn.textContent = "Accepter l'invitation";
+        showToast(data?.error || 'Impossible de rejoindre', 'error');
+      }
+    }
+
+    function switchAccount() {
+      KBF_AUTH.clear();
+      const next = encodeURIComponent('/invite?token=' + token);
+      location.href = `/login?next=${next}`;
+    }
+  </script>
+</body>
+</html>

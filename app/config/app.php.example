@@ -1,0 +1,22 @@
+<?php
+/**
+ * Override optionnel de l'URL de base publique de KBForms.
+ *
+ * Par défaut, KBForms détecte tout seul :
+ *   - si la requête vient d'une vraie adresse (ex. http://192.168.1.32) → il la garde
+ *   - si on navigue sur localhost → il substitue l'IP LAN de la machine,
+ *     recalculée à chaque requête (donc suit les changements de réseau Wi-Fi)
+ *
+ * Copiez ce fichier en `app.php` UNIQUEMENT si vous voulez forcer une URL
+ * précise — par exemple :
+ *   - un nom de domaine        : 'https://forms.mondomaine.com'
+ *   - un tunnel ngrok          : 'https://xxxx-xx-xx.ngrok-free.app'
+ *   - une IP/port fixes        : 'http://192.168.1.50:8080'
+ *
+ * On peut aussi passer par la variable d'environnement KBF_BASE_URL
+ * (prioritaire sur ce fichier).
+ */
+
+return [
+    'base_url' => 'https://forms.mondomaine.com',
+];

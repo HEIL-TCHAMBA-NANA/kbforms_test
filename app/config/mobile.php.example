@@ -1,0 +1,18 @@
+<?php
+/**
+ * Client mobile officiel KBForms — secret partagé.
+ * NON versionné (voir mobile.php.example). Copier en `mobile.php`.
+ *
+ * L'app mobile envoie cet en-tête sur /login et /register :
+ *     X-KBF-Client-Secret: <client_secret>
+ * ce qui contourne le CAPTCHA (reCAPTCHA v2 web inadapté à une app native).
+ *
+ * Générer un secret : php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"
+ * Le même secret est fourni à l'app via --dart-define=KBF_CLIENT_SECRET=...
+ *
+ * Laisser vide → fonctionnalité inactive (le CAPTCHA reste exigé partout).
+ */
+
+return [
+    'client_secret' => '', // ex: 64 caractères hex
+];

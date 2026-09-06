@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Profil · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-5xl w-full mx-auto animate-fade-in">
+
+      <div class="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-6">
+        <nav class="bg-white border border-gray-200 rounded-2xl p-2 h-fit">
+          <button onclick="switchSec('profile')" id="s-profile" class="w-full text-left px-3 py-2 rounded-lg text-sm font-medium bg-indigo-50 text-indigo-700">Profil</button>
+          <button onclick="switchSec('security')" id="s-security" class="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Sécurité</button>
+          <button onclick="switchSec('danger')" id="s-danger" class="w-full text-left px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50">Zone danger</button>
+        </nav>
+
+        <section id="sec-content" class="bg-white border border-gray-200 rounded-2xl p-6"></section>
+      </div>
+    </main>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    let currentSec = 'profile';
+    if (KBF_AUTH.requireAuth()) {
+      renderSidebar('profile');
+      renderTopBar({ title: 'Mon compte' });
+      render();
+      // Re-render quand le profil complet (avatar, nom…) arrive de l'API
+      window.addEventListener('kbf:profile-loaded', () => render());
+    }
+
+    function switchSec(s) {
+      currentSec = s;
+      ['profile','security','danger'].forEach(k => {
+        const el = document.getElementById('s-'+k);
+        el.className = (k===s) ? (k==='danger'?'w-full text-left px-3 py-2 rounded-lg text-sm font-medium bg-red-50 text-red-700':'w-full text-left px-3 py-2 rounded-lg text-sm font-medium bg-indigo-50 text-indigo-700') : 'w-full text-left px-3 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50';
+      });
+      render();
+    }
+
+    function render() {
+      const u = KBF_AUTH.getUser() || {};
+      const c = document.getElementById('sec-content');
+      if (currentSec === 'profile') {
+        const name = u.name || [u.first_name, u.last_name].filter(Boolean).join(' ');
+        const av = u.avatar_data
+          ? `<img src="${escapeHtml(u.avatar_data)}" alt="" class="w-16 h-16 rounded-full object-cover border border-gray-200">`
+          : `<div class="w-16 h-16 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl font-bold">${initials(name)}</div>`;
+        c.innerHTML = `
+          <h2 class="font-semibold text-lg mb-4">Profil</h2>
+          <div class="flex items-center gap-4 mb-6">
+            <div id="avatar-preview">${av}</div>
+            <div class="flex flex-col gap-1">
+              <button onclick="pickAvatar()" class="text-sm text-indigo-600 font-medium text-left">Modifier l'avatar</button>
+              ${u.avatar_data ? `<button onclick="removeAvatar()" class="text-xs text-gray-500 hover:text-red-600 text-left">Retirer</button>` : ''}
+              <span class="text-[11px] text-gray-400">JPG, PNG ou WebP — 5 Mo max</span>
+            </div>
+            <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="onAvatarFile(event)">
+          </div>
+          <div class="space-y-4 max-w-md">
+            <div><label class="block text-sm font-medium mb-1">Nom complet</label><input id="p-name" value="${escapeHtml(name||'')}" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"></div>
+            <div><label class="block text-sm font-medium mb-1">Email</label><input id="p-email" type="email" value="${escapeHtml(u.email||'')}" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" disabled></div>
+            <button onclick="saveProfile()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Enregistrer</button>
+          </div>`;
+      } else if (currentSec === 'security') {
+        c.innerHTML = `
+          <h2 class="font-semibold text-lg mb-4">Sécurité</h2>
+          <div class="space-y-4 max-w-md">
+            <div><label class="block text-sm font-medium mb-1">Ancien mot de passe</label><input id="p-old" type="password" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"></div>
+            <div><label class="block text-sm font-medium mb-1">Nouveau mot de passe</label><input id="p-new" type="password" minlength="8" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"></div>
+            <div><label class="block text-sm font-medium mb-1">Confirmer</label><input id="p-new2" type="password" class="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"></div>
+            <button onclick="savePassword()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Mettre à jour</button>
+          </div>`;
+      } else {
+        c.innerHTML = `
+          <h2 class="font-semibold text-lg mb-4 text-red-700">Zone danger</h2>
+          <div class="border border-red-200 bg-red-50 rounded-xl p-5">
+            <h3 class="font-semibold text-red-800">Supprimer mon compte</h3>
+            <p class="text-sm text-red-700 mt-1">Cette action est irréversible. Tous vos formulaires et réponses seront supprimés.</p>
+            <button onclick="deleteAccount()" class="mt-3 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Supprimer mon compte</button>
+          </div>`;
+      }
+    }
+
+    async function saveProfile() {
+      const u = KBF_AUTH.getUser();
+      const body = { name: document.getElementById('p-name').value, email: document.getElementById('p-email').value };
+      const { ok, data } = await KBF_API.put(`/users/${u.id}`, body);
+      if (ok) { KBF_AUTH.save(KBF_AUTH.getToken(), { ...u, ...body }); showToast('Profil mis à jour'); }
+      else showToast(data?.error||'Erreur', 'error');
+    }
+
+    async function savePassword() {
+      const u = KBF_AUTH.getUser();
+      const oldP = document.getElementById('p-old').value, n = document.getElementById('p-new').value, n2 = document.getElementById('p-new2').value;
+      if (n.length < 8) return showToast('Min 8 caractères', 'warning');
+      if (n !== n2) return showToast('Les mots de passe ne correspondent pas', 'warning');
+      const { ok, data } = await KBF_API.put(`/users/${u.id}`, { current_password: oldP, new_password: n });
+      showToast(ok?'Mot de passe modifié':(data?.error||'Erreur'), ok?'success':'error');
+    }
+
+    async function deleteAccount() {
+      if (!confirm('Êtes-vous absolument sûr ? Action irréversible.')) return;
+      const u = KBF_AUTH.getUser();
+      const { ok } = await KBF_API.delete(`/users/${u.id}`);
+      if (ok) { KBF_AUTH.clear(); window.location.href = '/login'; }
+      else showToast('Erreur', 'error');
+    }
+
+    /* ── Avatar ─────────────────────────────────────────────────────────── */
+    function pickAvatar() { document.getElementById('avatar-file')?.click(); }
+
+    function resizeSquare(file, size = 256, quality = 0.85) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          const s = Math.min(img.width, img.height);
+          const sx = (img.width - s) / 2, sy = (img.height - s) / 2;
+          ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => reject(new Error('image illisible'));
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    async function onAvatarFile(e) {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) return showToast('Format non supporté', 'warning');
+      if (file.size > 5 * 1024 * 1024) return showToast('Image trop lourde (5 Mo max)', 'warning');
+      let dataUri;
+      try { dataUri = await resizeSquare(file); }
+      catch { return showToast('Impossible de lire cette image', 'error'); }
+      await saveAvatar(dataUri);
+    }
+
+    async function removeAvatar() {
+      if (!confirm('Retirer votre avatar ?')) return;
+      await saveAvatar(null);
+    }
+
+    async function saveAvatar(dataUri) {
+      const u = KBF_AUTH.getUser();
+      const { ok, data } = await KBF_API.put(`/users/${u.id}`, { avatar: dataUri });
+      if (ok && data?.success !== false) {
+        const merged = { ...(KBF_AUTH.getUser() || {}), avatar_data: dataUri || null };
+        localStorage.setItem('kbf_user', JSON.stringify(merged));
+        showToast(dataUri ? 'Avatar mis à jour' : 'Avatar retiré');
+        render();
+        window.dispatchEvent(new CustomEvent('kbf:profile-loaded', { detail: merged }));
+      } else {
+        showToast(data?.error || 'Erreur', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

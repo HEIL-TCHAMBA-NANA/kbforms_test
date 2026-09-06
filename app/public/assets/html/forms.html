@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mes formulaires · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-7xl w-full mx-auto animate-fade-in">
+
+      <!-- Filtres -->
+      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-6 flex flex-col md:flex-row md:items-center gap-3">
+        <div class="flex-1 relative">
+          <input id="search" oninput="onSearch()" type="text" placeholder="Rechercher un formulaire…" class="fld pl-9" />
+          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z"/></svg>
+        </div>
+        <div class="flex gap-2 flex-wrap" id="filter-tabs">
+          <button data-filter="all" class="filter-tab px-3 py-1.5 text-sm rounded-lg bg-indigo-50 text-indigo-700 font-medium">Tous</button>
+          <button data-filter="published" class="filter-tab px-3 py-1.5 text-sm rounded-lg text-gray-600 hover:bg-gray-100">Publiés</button>
+          <button data-filter="draft" class="filter-tab px-3 py-1.5 text-sm rounded-lg text-gray-600 hover:bg-gray-100">Brouillons</button>
+        </div>
+        <div class="flex gap-1 bg-gray-100 p-1 rounded-lg">
+          <button onclick="setView('grid')" id="view-grid" class="p-1.5 rounded bg-white shadow-sm" aria-label="Vue grille">
+            <svg class="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h6v6H4zM14 6h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+          </button>
+          <button onclick="setView('list')" id="view-list" class="p-1.5 rounded text-gray-500" aria-label="Vue liste">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div id="forms-content">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="kb-skeleton h-48"></div><div class="kb-skeleton h-48"></div><div class="kb-skeleton h-48"></div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Modal nouveau formulaire -->
+  <div id="modal-new" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+    <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col animate-fade-in">
+      <div class="flex justify-between items-start p-6 pb-4 border-b border-gray-100">
+        <div>
+          <h3 class="text-lg font-semibold" id="modal-new-title">Choisir un modèle</h3>
+          <p class="text-sm text-gray-500 mt-0.5" id="modal-new-sub">Partez d'un modèle prêt à l'emploi ou créez un formulaire vierge.</p>
+        </div>
+        <button onclick="closeModal('modal-new')" aria-label="Fermer" class="text-gray-400 hover:text-gray-700"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+
+      <!-- Vue galerie de modèles -->
+      <div id="tpl-gallery" class="flex-1 overflow-y-auto p-6 pt-4">
+        <div id="tpl-cats" class="flex gap-2 flex-wrap mb-4"></div>
+        <div id="tpl-grid" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div class="kb-skeleton h-32"></div><div class="kb-skeleton h-32"></div><div class="kb-skeleton h-32"></div>
+        </div>
+      </div>
+
+      <!-- Vue aperçu d'un modèle -->
+      <div id="tpl-preview" class="hidden flex-1 flex flex-col min-h-0">
+        <div class="flex items-center justify-between gap-3 px-6 py-3 border-b border-gray-100">
+          <button type="button" onclick="tplBackToGallery()" class="text-sm text-indigo-600 font-medium inline-flex items-center gap-1">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+            Retour aux modèles
+          </button>
+          <button type="button" id="tpl-preview-use" class="btn btn-primary btn-sm">Utiliser ce modèle</button>
+        </div>
+        <div id="tpl-preview-body" class="flex-1 overflow-y-auto p-6"></div>
+      </div>
+
+      <!-- Vue formulaire vierge -->
+      <div id="blank-form-view" class="hidden flex-1 overflow-y-auto p-6 pt-4">
+        <button type="button" onclick="tplBackToGallery()" class="text-sm text-indigo-600 font-medium inline-flex items-center gap-1 mb-4">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+          Retour aux modèles
+        </button>
+        <form onsubmit="return createForm(event)" class="space-y-3 max-w-md">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="new-title">Titre</label>
+            <input id="new-title" class="fld" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1" for="new-desc">Description</label>
+            <textarea id="new-desc" rows="3" class="fld"></textarea>
+          </div>
+          <div class="flex justify-end gap-2 pt-2">
+            <button type="button" onclick="closeModal('modal-new')" class="btn btn-secondary">Annuler</button>
+            <button type="submit" class="btn btn-primary">Créer</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal import -->
+  <div id="modal-import" class="hidden fixed inset-0 z-50 items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6">
+      <div class="flex justify-between items-start mb-4">
+        <h3 class="text-lg font-semibold">Importer un formulaire</h3>
+        <button onclick="closeModal('modal-import')" aria-label="Fermer" class="text-gray-400 hover:text-gray-700"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="inline-flex bg-gray-100 p-1 rounded-lg mb-4">
+        <button onclick="setImportType('json')" id="imp-json" class="px-3 py-1 text-sm rounded bg-white shadow-sm">JSON</button>
+        <button onclick="setImportType('csv')" id="imp-csv" class="px-3 py-1 text-sm rounded text-gray-600">CSV</button>
+      </div>
+      <input type="file" id="import-file" class="block w-full text-sm" />
+      <div class="flex justify-end gap-2 mt-4">
+        <button onclick="closeModal('modal-import')" class="btn btn-secondary">Annuler</button>
+        <button onclick="doImport()" class="btn btn-primary">Importer</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    let allForms = [];
+    let currentFilter = 'all';
+    let currentView = 'grid';
+    let importType = 'json';
+
+    // ── Modèles de formulaires ─────────────────────────────────────────────
+    let templates = [];
+    let tplCategories = {};
+    let tplFilter = 'all';
+    let tplLoaded = false;
+    let tplBusy = false;
+
+    function openNewModal() {
+      tplBackToGallery();
+      openModal('modal-new');
+      if (!tplLoaded) loadTemplates();
+    }
+
+    async function loadTemplates() {
+      const { ok, data } = await KBF_API.get('/templates');
+      if (ok && Array.isArray(data?.templates)) {
+        templates = data.templates;
+        tplCategories = data.categories || {};
+        tplLoaded = true;
+      }
+      renderTplCats();
+      renderTplGrid();
+    }
+
+    function setTplFilter(k) { tplFilter = k; renderTplCats(); renderTplGrid(); }
+
+    function renderTplCats() {
+      const cats = [['all', 'Tous'], ...Object.entries(tplCategories)];
+      document.getElementById('tpl-cats').innerHTML = cats.map(([k, label]) =>
+        `<button type="button" onclick="setTplFilter('${k}')" class="px-3 py-1.5 text-sm rounded-lg ${k === tplFilter ? 'bg-indigo-50 text-indigo-700 font-medium' : 'text-gray-600 hover:bg-gray-100'}">${escapeHtml(label)}</button>`
+      ).join('');
+    }
+
+    const TPL_TYPE_LABELS = {
+      short_text: 'Texte court', long_text: 'Paragraphe', email: 'Email', phone: 'Téléphone',
+      radio: 'Choix unique', checkbox: 'Cases à cocher', dropdown: 'Liste déroulante',
+      date: 'Date', time: 'Heure', linear_scale: 'Échelle', grid: 'Grille',
+    };
+
+    function renderTplGrid() {
+      const grid = document.getElementById('tpl-grid');
+      const blankCard = `
+        <button type="button" onclick="tplShowBlank()" class="text-left border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors flex flex-col gap-2">
+          <span class="w-9 h-9 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center">${kbIcon('plus', 'w-5 h-5')}</span>
+          <span class="font-semibold text-sm text-gray-900">Formulaire vierge</span>
+          <span class="text-xs text-gray-500 leading-snug flex-1">Repartir de zéro avec un simple titre et une description.</span>
+        </button>`;
+      const list = templates.filter(t => tplFilter === 'all' || t.category === tplFilter);
+      grid.innerHTML = blankCard + list.map(tplCard).join('');
+    }
+
+    function tplCard(t) {
+      const secLabel = `${t.section_count} section${t.section_count > 1 ? 's' : ''} · ${t.question_count} question${t.question_count > 1 ? 's' : ''}`;
+      return `
+        <button type="button" onclick="tplPreview('${t.key}')" class="tpl-card text-left border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-indigo-200 transition-all flex flex-col gap-2">
+          <span class="w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0" style="background:${escapeHtml(t.accent || '#4F46E5')}">${kbIcon(t.icon || 'clipboard', 'w-5 h-5')}</span>
+          <span class="font-semibold text-sm text-gray-900">${escapeHtml(t.name)}</span>
+          <span class="text-xs text-gray-500 leading-snug flex-1">${escapeHtml(t.description)}</span>
+          <span class="text-[11px] text-gray-400 mt-1">${secLabel}</span>
+        </button>`;
+    }
+
+    // Bascule entre les 3 vues du modal : galerie / aperçu / formulaire vierge.
+    function tplShowView(which) {
+      const map = { gallery: 'tpl-gallery', preview: 'tpl-preview', blank: 'blank-form-view' };
+      Object.values(map).forEach(id => document.getElementById(id).classList.add('hidden'));
+      document.getElementById(map[which]).classList.remove('hidden');
+      const titles = {
+        gallery: ['Choisir un modèle', "Partez d'un modèle prêt à l'emploi ou créez un formulaire vierge."],
+        preview: ['Aperçu du modèle', "Rien n'est créé tant que vous ne cliquez pas sur « Utiliser ce modèle »."],
+        blank:   ['Nouveau formulaire vierge', 'Donnez-lui un titre — tout reste modifiable ensuite.'],
+      };
+      document.getElementById('modal-new-title').textContent = titles[which][0];
+      document.getElementById('modal-new-sub').textContent = titles[which][1];
+    }
+
+    function tplShowBlank() { tplShowView('blank'); document.getElementById('new-title').focus(); }
+    function tplBackToGallery() { tplShowView('gallery'); }
+
+    function tplPreview(key) {
+      const t = templates.find(x => x.key === key);
+      if (!t) return;
+      const secLabel = `${t.section_count} section${t.section_count > 1 ? 's' : ''} · ${t.question_count} question${t.question_count > 1 ? 's' : ''}`;
+
+      const sectionsHtml = (t.sections || []).map((s, si) => {
+        const qsHtml = (s.questions || []).map(q => {
+          const typeLabel = TPL_TYPE_LABELS[q.type] || q.type;
+          let detail = '';
+          if (Array.isArray(q.options) && q.options.length) {
+            detail = `<div class="flex flex-wrap gap-1 mt-1.5">${q.options.map(o => `<span class="text-[11px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">${escapeHtml(o)}</span>`).join('')}</div>`;
+          } else if (q.type === 'linear_scale') {
+            detail = `<div class="text-[11px] text-gray-500 mt-1">De ${q.scale_min ?? 1} à ${q.scale_max ?? 5}</div>`;
+          } else if (q.type === 'grid') {
+            detail = `<div class="text-[11px] text-gray-500 mt-1">${(q.grid_rows || []).length} lignes × ${(q.grid_columns || []).length} colonnes</div>`;
+          }
+          const help = q.help_text ? `<div class="text-[11px] text-gray-400 mt-0.5">${escapeHtml(q.help_text)}</div>` : '';
+          return `<li class="py-2 border-b border-gray-100 last:border-0">
+            <div class="flex items-start gap-2">
+              <span class="text-[10px] uppercase tracking-wide font-medium text-indigo-600 bg-indigo-50 rounded px-1.5 py-0.5 mt-0.5 shrink-0">${escapeHtml(typeLabel)}</span>
+              <div class="min-w-0">
+                <div class="text-sm text-gray-800">${escapeHtml(q.label)}${q.required ? ' <span class="text-red-500">*</span>' : ''}</div>
+                ${help}${detail}
+              </div>
+            </div>
+          </li>`;
+        }).join('');
+        return `<div class="border border-gray-200 rounded-xl p-4 mb-3">
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Section ${si + 1}</div>
+          <div class="font-semibold text-gray-900">${escapeHtml(s.title || '')}</div>
+          ${s.description ? `<p class="text-sm text-gray-500 mt-0.5">${escapeHtml(s.description)}</p>` : ''}
+          <ul class="mt-2">${qsHtml}</ul>
+        </div>`;
+      }).join('');
+
+      document.getElementById('tpl-preview-body').innerHTML = `
+        <div class="flex items-start gap-3 mb-4">
+          <span class="w-11 h-11 rounded-xl flex items-center justify-center text-white shrink-0" style="background:${escapeHtml(t.accent || '#4F46E5')}">${kbIcon(t.icon || 'clipboard', 'w-6 h-6')}</span>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <h4 class="text-base font-semibold text-gray-900">${escapeHtml(t.name)}</h4>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">${escapeHtml(t.category_label || '')}</span>
+            </div>
+            <p class="text-sm text-gray-500 mt-0.5">${escapeHtml(t.description)}</p>
+            <p class="text-[11px] text-gray-400 mt-1">${secLabel}</p>
+          </div>
+        </div>
+        ${sectionsHtml}`;
+
+      const useBtn = document.getElementById('tpl-preview-use');
+      useBtn.disabled = false;
+      useBtn.textContent = 'Utiliser ce modèle';
+      useBtn.onclick = () => tplUse(t.key, useBtn);
+
+      tplShowView('preview');
+      document.getElementById('tpl-preview-body').scrollTop = 0;
+    }
+
+    async function tplUse(key, btn) {
+      if (tplBusy) return;
+      tplBusy = true;
+      const user = KBF_AUTH.getUser();
+      if (btn) { btn.disabled = true; btn.dataset.prev = btn.textContent; btn.textContent = 'Création…'; }
+      const { ok, data } = await KBF_API.post('/templates/use', { user_id: user.id, template: key });
+      if (ok && data?.form_id) {
+        showToast('Formulaire créé depuis le modèle');
+        window.location.href = `/form-builder?id=${data.form_id}`;
+      } else {
+        tplBusy = false;
+        if (btn) { btn.disabled = false; btn.textContent = btn.dataset.prev || 'Utiliser ce modèle'; }
+        showToast(data?.error || 'Erreur lors de la création', 'error');
+      }
+    }
+
+    // Fermer les menus au clic en dehors
+    document.addEventListener('click', closeMenus);
+
+    if (KBF_AUTH.requireAuth()) {
+      renderSidebar('forms');
+      renderTopBar({
+        title: 'Mes formulaires',
+        actions: `
+          <button onclick="openModal('modal-import')" class="btn btn-secondary btn-sm">Importer</button>
+          <button onclick="openNewModal()" class="btn btn-primary btn-sm">+ Nouveau formulaire</button>
+        `
+      });
+      loadForms();
+      if (getQueryParam('new')) openNewModal();
+      if (getQueryParam('import')) openModal('modal-import');
+
+      document.querySelectorAll('.filter-tab').forEach(b => b.addEventListener('click', () => {
+        document.querySelectorAll('.filter-tab').forEach(x => x.className = 'filter-tab px-3 py-1.5 text-sm rounded-lg text-gray-600 hover:bg-gray-100');
+        b.className = 'filter-tab px-3 py-1.5 text-sm rounded-lg bg-indigo-50 text-indigo-700 font-medium';
+        currentFilter = b.dataset.filter;
+        renderForms();
+      }));
+    }
+
+    async function loadForms() {
+      const user = KBF_AUTH.getUser();
+      const { ok, data } = await KBF_API.get(`/users/${user.id}/forms`);
+      allForms = (ok && Array.isArray(data)) ? data : (data?.forms || []);
+      renderForms();
+    }
+
+    const onSearch = debounce(() => renderForms(), 300);
+
+    function setView(v) {
+      currentView = v;
+      document.getElementById('view-grid').className = v === 'grid' ? 'p-1.5 rounded bg-white shadow-sm' : 'p-1.5 rounded text-gray-500';
+      document.getElementById('view-list').className = v === 'list' ? 'p-1.5 rounded bg-white shadow-sm' : 'p-1.5 rounded text-gray-500';
+      renderForms();
+    }
+
+    function isPublished(f) { return f.is_published || f.status === 'published'; }
+
+    function renderForms() {
+      const search = document.getElementById('search').value.toLowerCase();
+      let list = allForms.filter(f => (f.title || '').toLowerCase().includes(search));
+      if (currentFilter === 'published') list = list.filter(isPublished);
+      else if (currentFilter === 'draft') list = list.filter(f => !isPublished(f));
+
+      const mount = document.getElementById('forms-content');
+      if (!list.length) {
+        mount.innerHTML = `<div class="text-center py-16 bg-white rounded-2xl border border-gray-200">
+          <div class="flex justify-center mb-3 text-gray-300">${kbIcon('clipboard','w-14 h-14')}</div>
+          <h3 class="text-lg font-semibold text-gray-700">Aucun formulaire pour l'instant</h3>
+          <p class="text-sm text-gray-500 mt-1">Créez votre premier formulaire pour commencer à collecter des réponses.</p>
+          <button onclick="openNewModal()" class="mt-4 btn btn-primary">+ Nouveau formulaire</button>
+        </div>`;
+        return;
+      }
+
+      if (currentView === 'grid') {
+        mount.innerHTML = `<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(formCard).join('')}</div>`;
+      } else {
+        mount.innerHTML = `
+          <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr><th class="text-left px-4 py-3">Titre</th><th class="text-left px-4 py-3">Statut</th><th class="text-left px-4 py-3">Réponses</th><th class="text-left px-4 py-3">Créé</th><th class="px-4 py-3"></th></tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                ${list.map(f => `
+                  <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3"><a href="/form-builder?id=${f.id}" class="font-medium text-gray-900 hover:text-indigo-600">${escapeHtml(f.title)}</a></td>
+                    <td class="px-4 py-3">${statusBadge(f)}</td>
+                    <td class="px-4 py-3">${f.response_count || 0}</td>
+                    <td class="px-4 py-3 text-gray-500">${formatDate(f.created_at)}</td>
+                    <td class="px-4 py-3 text-right">
+                      <a href="/form-builder?id=${f.id}" class="text-indigo-600 text-xs font-medium hover:underline">Éditer</a>
+                    </td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>`;
+      }
+    }
+
+    function statusBadge(f) {
+      return isPublished(f)
+        ? `<span class="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full font-medium">● Publié</span>`
+        : `<span class="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full font-medium">○ Brouillon</span>`;
+    }
+
+    function formCard(f) {
+      const color = f.theme_color || '#4F46E5';
+      return `
+        <div class="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden hover:shadow-lg transition-shadow">
+          <div class="h-20" style="background:linear-gradient(135deg, ${color}, ${color}cc)"></div>
+          <div class="p-5">
+            <h3 class="text-base font-semibold text-gray-900 truncate">${escapeHtml(f.title || 'Sans titre')}</h3>
+            <p class="text-xs text-gray-500 mt-1">Créé le ${formatDate(f.created_at)}</p>
+            <div class="flex items-center gap-3 mt-3 text-xs">
+              ${statusBadge(f)}
+              <span class="text-gray-500 inline-flex items-center gap-1">${kbIcon('chart-bar','w-3.5 h-3.5')} ${f.response_count || 0} réponses</span>
+            </div>
+            <div class="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100">
+              <a href="/form-builder?id=${f.id}" class="flex-1 text-center btn btn-primary btn-sm">Éditer</a>
+              <a href="/form-responses?id=${f.id}" class="flex-1 text-center btn btn-secondary btn-sm">Réponses</a>
+              <div class="relative" id="menu-wrap-${f.id}">
+              <button onclick="toggleMenu(event, ${f.id})" aria-label="Plus d'actions"
+                class="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 hover:text-gray-700">⋮</button>
+              <div id="menu-${f.id}" class="hidden absolute right-0 bottom-9 z-30 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1 text-sm">
+                <button onclick="closeMenus(); window.location.href='/form-builder?id=${f.id}'"
+                  class="w-full text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2.5 text-gray-700">
+                  <span class="text-gray-400">${kbIcon('pencil','w-4 h-4')}</span><span>Éditer</span>
+                </button>
+                <button onclick="closeMenus(); window.location.href='/form-settings?id=${f.id}&tab=general'"
+                  class="w-full text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2.5 text-gray-700">
+                  <span class="text-gray-400">${kbIcon('gear','w-4 h-4')}</span><span>Paramètres</span>
+                </button>
+                <button onclick="closeMenus(); window.location.href='/form-settings?id=${f.id}&tab=share'"
+                  class="w-full text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2.5 text-gray-700">
+                  <span class="text-gray-400">${kbIcon('link','w-4 h-4')}</span><span>Partager</span>
+                </button>
+                <button onclick="closeMenus(); duplicateForm(${f.id})"
+                  class="w-full text-left px-4 py-2 hover:bg-gray-50 flex items-center gap-2.5 text-gray-700">
+                  <span class="text-gray-400">${kbIcon('copy','w-4 h-4')}</span><span>Dupliquer</span>
+                </button>
+                <hr class="my-1 border-gray-100">
+                <button onclick="closeMenus(); deleteForm(${f.id})"
+                  class="w-full text-left px-4 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2.5">
+                  <span>${kbIcon('trash','w-4 h-4')}</span><span>Supprimer</span>
+                </button>
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function toggleMenu(e, id) {
+      e.stopPropagation();
+      const menu = document.getElementById('menu-' + id);
+      const isHidden = menu.classList.contains('hidden');
+      closeMenus(); // fermer tous les autres
+      if (isHidden) menu.classList.remove('hidden');
+    }
+
+    function closeMenus() {
+      document.querySelectorAll('[id^="menu-"]').forEach(m => {
+        if (!m.id.startsWith('menu-wrap-')) m.classList.add('hidden');
+      });
+    }
+
+    async function duplicateForm(id) {
+      const user = KBF_AUTH.getUser();
+      const { ok } = await KBF_API.post(`/forms/${id}/duplicate`, { user_id: user?.id });
+      if (ok) { showToast('Formulaire dupliqué'); loadForms(); }
+      else showToast('Erreur lors de la duplication', 'error');
+    }
+
+    async function deleteForm(id) {
+      if (!confirm('Supprimer ce formulaire définitivement ? Cette action est irréversible.')) return;
+      const { ok } = await KBF_API.delete(`/forms/${id}`);
+      if (ok) { showToast('Formulaire supprimé'); loadForms(); }
+      else showToast('Erreur lors de la suppression', 'error');
+    }
+
+    async function createForm(e) {
+      e.preventDefault();
+      const user = KBF_AUTH.getUser();
+      const title = document.getElementById('new-title').value.trim() || 'Formulaire sans titre';
+      const description = document.getElementById('new-desc').value.trim();
+      const { ok, data } = await KBF_API.post('/forms', { user_id: user.id, title, description });
+      if (ok) {
+        closeModal('modal-new');
+        showToast('Formulaire créé');
+        const newId = data?.form_id || data?.id || data?.form?.id;
+        if (newId) window.location.href = `/form-builder?id=${newId}`;
+        else loadForms();
+      } else showToast(data?.error || 'Erreur', 'error');
+      return false;
+    }
+
+    function setImportType(t) {
+      importType = t;
+      document.getElementById('imp-json').className = t === 'json' ? 'px-3 py-1 text-sm rounded bg-white shadow-sm' : 'px-3 py-1 text-sm rounded text-gray-600';
+      document.getElementById('imp-csv').className = t === 'csv' ? 'px-3 py-1 text-sm rounded bg-white shadow-sm' : 'px-3 py-1 text-sm rounded text-gray-600';
+    }
+
+    async function doImport() {
+      const file = document.getElementById('import-file').files[0];
+      if (!file) return showToast('Sélectionnez un fichier', 'warning');
+      const text = await file.text();
+      let body;
+      try { body = importType === 'json' ? JSON.parse(text) : { csv: text }; }
+      catch { return showToast('Fichier invalide', 'error'); }
+      const { ok, data } = await KBF_API.post(`/forms/import/${importType}`, body);
+      if (ok) { closeModal('modal-import'); showToast('Importé'); loadForms(); }
+      else showToast(data?.error || 'Erreur', 'error');
+    }
+  </script>
+</body>
+</html>

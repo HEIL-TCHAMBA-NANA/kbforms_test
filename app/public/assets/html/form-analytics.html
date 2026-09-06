@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Analytics · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    .an-section-title { font-size: .72rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #94a3b8; }
+    .an-card { background:#fff; border:1px solid #e5e7eb; border-radius:1rem; box-shadow:0 1px 2px rgba(16,24,40,.04); }
+    .an-kpi-label { font-size:.7rem; font-weight:600; letter-spacing:.05em; text-transform:uppercase; color:#94a3b8; }
+    .an-kpi-value { font-family:'Plus Jakarta Sans', sans-serif; font-weight:700; font-size:1.75rem; line-height:1.1; color:#0f172a; }
+    .an-chart-wrap { position:relative; width:100%; }
+    .an-stat { text-align:center; }
+    .an-stat b { display:block; font-family:'Plus Jakarta Sans',sans-serif; font-size:1.15rem; color:#0f172a; }
+    .an-stat span { font-size:.7rem; text-transform:uppercase; letter-spacing:.04em; color:#94a3b8; }
+    table.an-tbl { width:100%; font-size:.8rem; }
+    table.an-tbl th { text-align:left; font-weight:600; color:#64748b; padding:.35rem .5rem; border-bottom:1px solid #f1f5f9; }
+    table.an-tbl td { padding:.4rem .5rem; border-bottom:1px solid #f8fafc; }
+    table.an-tbl td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  </style>
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-7xl w-full mx-auto animate-fade-in space-y-8">
+
+      <section id="kpis" class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        <div class="kb-skeleton h-24"></div><div class="kb-skeleton h-24"></div><div class="kb-skeleton h-24"></div>
+        <div class="kb-skeleton h-24"></div><div class="kb-skeleton h-24"></div><div class="kb-skeleton h-24"></div>
+      </section>
+
+      <section id="volume"></section>
+      <section id="activity"></section>
+      <section id="funnel"></section>
+      <section id="questions"></section>
+
+    </main>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    const formId = Number(getQueryParam('id'));
+
+    const PALETTE  = ['#4F46E5','#0EA5E9','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899','#14B8A6','#F97316','#64748B'];
+    const WEEKDAYS = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
+    const TYPE_LABEL = {
+      short_text:'Texte court', long_text:'Paragraphe', email:'Email', phone:'Téléphone',
+      radio:'Choix unique', checkbox:'Cases à cocher', dropdown:'Liste déroulante',
+      date:'Date', time:'Heure', linear_scale:'Échelle', grid:'Grille',
+    };
+
+    if (window.Chart) {
+      Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+      Chart.defaults.font.size = 11;
+      Chart.defaults.color = '#6b7280';
+      Chart.defaults.maintainAspectRatio = false;
+      Chart.defaults.plugins.legend.labels.boxWidth = 10;
+      Chart.defaults.plugins.legend.labels.boxHeight = 10;
+      Chart.defaults.plugins.legend.labels.usePointStyle = true;
+      Chart.defaults.plugins.tooltip.padding = 10;
+      Chart.defaults.plugins.tooltip.cornerRadius = 8;
+      Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(17,24,39,.92)';
+      Chart.defaults.plugins.tooltip.titleFont = { weight: '600' };
+    }
+    const AXIS = { grid: { color: '#f1f5f9' }, border: { display: false }, ticks: { maxRotation: 0 } };
+    const _charts = [];
+
+    (async () => {
+      if (!KBF_AUTH.requireAuth()) return;
+      renderSidebar('analytics');
+      renderTopBar({
+        title: 'Analytics',
+        actions: formId
+          ? `<button onclick="exportCsv()" class="btn btn-secondary btn-sm">Exporter CSV</button>
+             <a href="/form-responses?id=${formId}" class="btn btn-ghost btn-sm">Voir réponses →</a>`
+          : ''
+      });
+
+      if (!formId) return renderFormPicker();
+      loadAnalytics();
+    })();
+
+    async function renderFormPicker() {
+      const user = KBF_AUTH.getUser();
+      const userId = user?.id;
+      const { ok, data } = userId ? await KBF_API.get(`/users/${userId}/forms`) : { ok:false };
+      const forms = ok ? (Array.isArray(data) ? data : (data?.forms || [])) : [];
+      document.querySelector('main').innerHTML = `
+        <div class="an-card p-8 max-w-md mx-auto text-center">
+          <h2 class="text-lg font-semibold text-gray-800 mb-2">Choisir un formulaire</h2>
+          <p class="text-sm text-gray-500 mb-4">Sélectionnez un formulaire pour afficher son tableau de bord analytique.</p>
+          ${forms.length ? `
+            <select id="form-select" class="fld mb-4">
+              <option value="">— Sélectionnez —</option>
+              ${forms.map(f => `<option value="${f.id}">${escapeHtml(f.title || 'Sans titre')}</option>`).join('')}
+            </select>
+            <button onclick="goToAnalytics()" class="w-full btn btn-primary">Ouvrir</button>
+          ` : `<p class="text-sm text-gray-400 italic">Aucun formulaire. <a href="/forms" class="text-indigo-600 font-medium">Créez-en un</a>.</p>`}
+        </div>`;
+    }
+    function goToAnalytics() {
+      const sel = document.getElementById('form-select');
+      if (sel && sel.value) location.href = `/form-analytics?id=${sel.value}`;
+    }
+    async function exportCsv() {
+      try { await KBF_API.download(`/forms/${formId}/export/csv`, `reponses-${formId}.csv`); showToast('Téléchargement lancé'); }
+      catch { showToast('Export impossible', 'error'); }
+    }
+
+    // ── Helpers de rendu ───────────────────────────────────────────────────
+    const pct    = x => x === null || x === undefined ? '—' : Math.round(x * 100) + '%';
+    const num    = x => x === null || x === undefined ? '—' : (Math.round(x * 100) / 100).toLocaleString('fr-FR');
+    const clip   = (s, n = 46) => { s = String(s ?? ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+
+    function kpi(label, value, sub) {
+      return `<div class="an-card p-4">
+        <div class="an-kpi-label">${label}</div>
+        <div class="an-kpi-value mt-1">${value}</div>
+        ${sub ? `<div class="text-xs text-gray-400 mt-1">${sub}</div>` : ''}
+      </div>`;
+    }
+    function deltaBadge(d) {
+      if (d === null || d === undefined) return '';
+      const up = d >= 0;
+      const cls = up ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600';
+      return `<span class="text-[11px] font-semibold px-1.5 py-0.5 rounded ${cls}">${up ? '▲' : '▼'} ${Math.abs(d)}%</span>`;
+    }
+    function block(title, hint, inner) {
+      return `<div class="an-card p-5">
+        <div class="flex items-baseline justify-between mb-4">
+          <h3 class="font-semibold text-gray-900 text-sm">${title}</h3>
+          ${hint ? `<span class="text-xs text-gray-400">${hint}</span>` : ''}
+        </div>
+        ${inner}
+      </div>`;
+    }
+
+    async function loadAnalytics() {
+      const { ok, data } = await KBF_API.get(`/forms/${formId}/analytics`);
+      if (!ok) { showToast('Erreur de chargement', 'error'); return; }
+
+      const s = data.summary || {};
+      const total = s.total_responses ?? data.total_responses ?? 0;
+
+      // ── KPI ────────────────────────────────────────────────────────────
+      const respondents = s.identified_respondents
+        ? `${s.identified_respondents}`
+        : (s.anonymous_responses ? `${s.anonymous_responses}` : '—');
+      const respondentsSub = s.identified_respondents
+        ? 'identifiés'
+        : (s.anonymous_responses ? 'anonymes' : '');
+      document.getElementById('kpis').innerHTML = [
+        kpi('Total réponses', total, s.first_response_at ? `depuis le ${formatDate(s.first_response_at)}` : ''),
+        kpi('Répondants', respondents, respondentsSub),
+        kpi('Taux de complétion', pct(s.completion_rate ?? data.completion_rate), `${s.required_question_count || 0} question(s) obligatoire(s)`),
+        kpi('Réponses · 7 j', `${s.responses_7d ?? 0} ${deltaBadge(s.delta_7d_pct)}`, `7 j préc. : ${s.responses_prev_7d ?? 0}`),
+        kpi('Réponses · 30 j', s.responses_30d ?? 0, `~${num(s.avg_answers_per_response)} réponses / soumission`),
+        kpi('Dernière réponse', s.last_response_at ? timeAgo(s.last_response_at) : '—', s.last_response_at ? formatDate(s.last_response_at) : ''),
+      ].join('');
+
+      if (!total) {
+        ['volume','activity','funnel','questions'].forEach(id => document.getElementById(id).innerHTML = '');
+        document.getElementById('questions').innerHTML = `
+          <div class="an-card p-10 text-center">
+            <div class="flex justify-center mb-3 text-gray-300">${kbIcon('chart-bar','w-12 h-12')}</div>
+            <h3 class="font-semibold text-gray-700">Pas encore de réponse</h3>
+            <p class="text-sm text-gray-500 mt-1">Le tableau de bord s'activera dès la première soumission.</p>
+          </div>`;
+        return;
+      }
+
+      renderVolume(data.timeseries || []);
+      renderActivity(data.activity || {});
+      renderFunnel(data.funnel || []);
+      renderQuestions(data.questions || []);
+      _charts.forEach(fn => { try { fn(); } catch (e) { console.warn(e); } });
+    }
+
+    // ── Volume des réponses ────────────────────────────────────────────────
+    function renderVolume(ts) {
+      document.getElementById('volume').innerHTML = `
+        <div class="an-section-title mb-3">Volume des réponses</div>
+        ${block('Réponses quotidiennes & cumul', '31 derniers jours',
+          `<div class="an-chart-wrap" style="height:280px"><canvas id="c-volume"></canvas></div>`)}`;
+      _charts.push(() => {
+        new Chart(document.getElementById('c-volume'), {
+          data: {
+            labels: ts.map(p => p.day.slice(5)),
+            datasets: [
+              { type:'bar', label:'Réponses / jour', data: ts.map(p => p.count),
+                backgroundColor:'#c7d2fe', hoverBackgroundColor:'#a5b4fc', borderRadius:4, maxBarThickness:22, yAxisID:'y' },
+              { type:'line', label:'Cumul', data: ts.map(p => p.cumulative),
+                borderColor:'#4F46E5', backgroundColor:'rgba(79,70,229,.08)', borderWidth:2,
+                fill:true, tension:.3, pointRadius:0, yAxisID:'y1' },
+            ],
+          },
+          options: {
+            interaction: { mode:'index', intersect:false },
+            scales: {
+              x: { ...AXIS, grid: { display:false } },
+              y: { ...AXIS, beginAtZero:true, position:'left', title:{ display:true, text:'par jour' } },
+              y1:{ ...AXIS, beginAtZero:true, position:'right', grid:{ drawOnChartArea:false }, title:{ display:true, text:'cumul' } },
+            },
+          },
+        });
+      });
+    }
+
+    // ── Activité ──────────────────────────────────────────────────────────
+    function renderActivity(a) {
+      const wd = a.by_weekday || [];
+      const hr = a.by_hour || [];
+      document.getElementById('activity').innerHTML = `
+        <div class="an-section-title mb-3">Répartition temporelle</div>
+        <div class="grid md:grid-cols-2 gap-3">
+          ${block('Par jour de la semaine', '', `<div class="an-chart-wrap" style="height:220px"><canvas id="c-wd"></canvas></div>`)}
+          ${block('Par heure de la journée', 'heure locale', `<div class="an-chart-wrap" style="height:220px"><canvas id="c-hr"></canvas></div>`)}
+        </div>`;
+      _charts.push(() => {
+        new Chart(document.getElementById('c-wd'), {
+          type:'bar',
+          data:{ labels: WEEKDAYS, datasets:[{ data: wd, backgroundColor:'#4F46E5', borderRadius:4, maxBarThickness:34 }] },
+          options:{ plugins:{ legend:{ display:false } }, scales:{ x:{ ...AXIS, grid:{ display:false } }, y:{ ...AXIS, beginAtZero:true, precision:0 } } },
+        });
+        new Chart(document.getElementById('c-hr'), {
+          type:'bar',
+          data:{ labels: hr.map((_,i)=> String(i).padStart(2,'0')), datasets:[{ data: hr, backgroundColor:'#0EA5E9', borderRadius:3, maxBarThickness:16 }] },
+          options:{ plugins:{ legend:{ display:false } }, scales:{ x:{ ...AXIS, grid:{ display:false } }, y:{ ...AXIS, beginAtZero:true, precision:0 } } },
+        });
+      });
+    }
+
+    // ── Funnel / taux de réponse par question ─────────────────────────────
+    function renderFunnel(funnel) {
+      if (!funnel.length) { document.getElementById('funnel').innerHTML = ''; return; }
+      document.getElementById('funnel').innerHTML = `
+        <div class="an-section-title mb-3">Taux de réponse par question</div>
+        ${block('Complétion question par question', 'part des soumissions ayant renseigné le champ',
+          `<div class="an-chart-wrap" style="height:${Math.max(160, funnel.length * 38)}px"><canvas id="c-funnel"></canvas></div>`)}`;
+      _charts.push(() => {
+        new Chart(document.getElementById('c-funnel'), {
+          type:'bar',
+          data:{
+            labels: funnel.map((f,i) => `${i+1}. ${clip(f.label, 40)}`),
+            datasets:[{
+              data: funnel.map(f => Math.round((f.response_rate ?? 0) * 100)),
+              backgroundColor: funnel.map(f => f.required ? '#4F46E5' : '#94a3b8'),
+              borderRadius:4, maxBarThickness:22,
+            }],
+          },
+          options:{
+            indexAxis:'y',
+            plugins:{
+              legend:{ display:false },
+              tooltip:{ callbacks:{ label: c => `${c.raw}% · ${funnel[c.dataIndex].answered} réponses${funnel[c.dataIndex].required ? ' · obligatoire' : ''}` } },
+            },
+            scales:{ x:{ ...AXIS, beginAtZero:true, max:100, ticks:{ callback:v=>v+'%' } }, y:{ ...AXIS, grid:{ display:false } } },
+          },
+        });
+      });
+    }
+
+    // ── Détail par question ──────────────────────────────────────────────
+    function renderQuestions(qs) {
+      if (!qs.length) { document.getElementById('questions').innerHTML = ''; return; }
+      document.getElementById('questions').innerHTML =
+        `<div class="an-section-title mb-3">Détail par question</div>
+         <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">${qs.map(renderQuestion).join('')}</div>`;
+    }
+
+    function statStrip(items) {
+      return `<div class="grid grid-cols-${Math.min(items.length,6)} gap-2 mb-4 p-3 rounded-xl bg-gray-50">
+        ${items.map(it => `<div class="an-stat"><b>${it.v}</b><span>${it.k}</span></div>`).join('')}
+      </div>`;
+    }
+
+    function renderQuestion(q, i) {
+      const st = q.stats || {};
+      const head = `
+        <div class="flex items-start justify-between gap-3 mb-1">
+          <h4 class="font-semibold text-gray-900 text-sm leading-snug">${i+1}. ${escapeHtml(q.label)}</h4>
+          <span class="shrink-0 text-[10px] uppercase tracking-wide font-medium text-indigo-600 bg-indigo-50 rounded px-1.5 py-0.5">${TYPE_LABEL[q.type] || q.type}</span>
+        </div>
+        <div class="text-xs text-gray-500 mb-3">${st.answered_count ?? 0} réponses · ${pct(st.response_rate)} de complétion${q.required ? ' · obligatoire' : ''}</div>`;
+
+      let body = '';
+      const counts = st.value_counts || [];
+
+      if (['radio','dropdown'].includes(q.type)) {
+        body = counts.length
+          ? `<div class="grid sm:grid-cols-2 gap-3 items-center">
+               <div class="an-chart-wrap" style="height:200px"><canvas id="cq-${i}"></canvas></div>
+               ${countTable(counts)}
+             </div>`
+          : emptyQ();
+        if (counts.length) _charts.push(() => doughnut(`cq-${i}`, counts));
+
+      } else if (q.type === 'checkbox') {
+        body = counts.length
+          ? `<div class="an-chart-wrap" style="height:${Math.max(140, counts.length*32)}px"><canvas id="cq-${i}"></canvas></div>${countTable(counts)}`
+          : emptyQ();
+        if (counts.length) _charts.push(() => hbar(`cq-${i}`, counts));
+
+      } else if (q.type === 'linear_scale') {
+        const nStat = st.numeric || {};
+        body = statStrip([
+          { k:'Moyenne', v:num(nStat.avg) }, { k:'Médiane', v:num(nStat.median) },
+          { k:'Écart-type', v:num(nStat.stddev) }, { k:'Min', v:num(nStat.min) },
+          { k:'Max', v:num(nStat.max) }, { k:'n', v:nStat.n ?? 0 },
+        ]);
+        body += `<div class="an-chart-wrap" style="height:190px"><canvas id="cq-${i}"></canvas></div>`;
+        if (st.nps) body += npsPanel(st.nps);
+        const dist = st.distribution || [];
+        _charts.push(() => {
+          new Chart(document.getElementById(`cq-${i}`), {
+            type:'bar',
+            data:{ labels: dist.map(d => d.value), datasets:[{ data: dist.map(d => d.count), backgroundColor:'#4F46E5', borderRadius:4, maxBarThickness:38 }] },
+            options:{ plugins:{ legend:{ display:false } }, scales:{ x:{ ...AXIS, grid:{ display:false }, title:{ display:true, text:'note' } }, y:{ ...AXIS, beginAtZero:true, precision:0 } } },
+          });
+        });
+
+      } else if (['short_text','long_text'].includes(q.type)) {
+        body = statStrip([
+          { k:'Réponses', v: st.answered_count ?? 0 },
+          { k:'Longueur moy.', v: st.avg_chars != null ? st.avg_chars + ' car.' : '—' },
+          { k:'Mots moy.', v: st.avg_words ?? '—' },
+        ]);
+        const top = counts.slice(0, 8);
+        body += top.length
+          ? `<div class="text-xs text-gray-400 mb-1">Réponses fréquentes</div>
+             <ul class="text-sm divide-y divide-gray-100">
+               ${top.map(t => `<li class="flex justify-between py-1.5 gap-3"><span class="text-gray-700 truncate">${escapeHtml(t.value)}</span><span class="text-gray-900 font-medium tabular-nums">${t.count}</span></li>`).join('')}
+             </ul>`
+          : emptyQ();
+
+      } else if (q.type === 'grid') {
+        body = gridBreakdown(counts) || emptyQ();
+
+      } else { // date, time, phone, email
+        body = counts.length ? countTable(counts.slice(0, 12)) : emptyQ();
+      }
+
+      return `<div class="an-card p-5">${head}${body}</div>`;
+    }
+
+    // Agrège les réponses de grille (value = JSON {ligne: colonne}) en matrice.
+    function gridBreakdown(counts) {
+      const rows = [];
+      const cols = [];
+      const matrix = {};
+      let any = false;
+      counts.forEach(c => {
+        let obj;
+        try { obj = JSON.parse(c.value); } catch { return; }
+        if (!obj || typeof obj !== 'object') return;
+        any = true;
+        Object.entries(obj).forEach(([r, col]) => {
+          if (!rows.includes(r)) rows.push(r);
+          if (!cols.includes(col)) cols.push(col);
+          matrix[r] = matrix[r] || {};
+          matrix[r][col] = (matrix[r][col] || 0) + c.count;
+        });
+      });
+      if (!any) return null;
+      return `<div class="overflow-x-auto"><table class="an-tbl">
+        <thead><tr><th>Ligne</th>${cols.map(c => `<th class="num">${escapeHtml(clip(c, 22))}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r => `
+          <tr><td class="font-medium text-gray-700">${escapeHtml(clip(r, 40))}</td>
+          ${cols.map(c => {
+            const v = (matrix[r] && matrix[r][c]) || 0;
+            const tot = cols.reduce((s, cc) => s + ((matrix[r] && matrix[r][cc]) || 0), 0);
+            const p = tot ? Math.round(v / tot * 100) : 0;
+            return `<td class="num">${v}${v ? ` <span class="text-gray-400">(${p}%)</span>` : ''}</td>`;
+          }).join('')}</tr>`).join('')}
+        </tbody>
+      </table></div>`;
+    }
+
+    function emptyQ() { return `<p class="text-sm text-gray-400 italic py-4">Aucune réponse enregistrée</p>`; }
+
+    function countTable(counts) {
+      return `<table class="an-tbl">
+        <thead><tr><th>Valeur</th><th class="num">n</th><th class="num">%</th></tr></thead>
+        <tbody>${counts.map(c => `
+          <tr><td>${escapeHtml(clip(c.value, 60))}</td><td class="num">${c.count}</td><td class="num">${c.pct ?? '—'}%</td></tr>`).join('')}
+        </tbody>
+      </table>`;
+    }
+
+    function doughnut(id, counts) {
+      new Chart(document.getElementById(id), {
+        type:'doughnut',
+        data:{ labels: counts.map(c => clip(c.value, 24)), datasets:[{ data: counts.map(c => c.count), backgroundColor: PALETTE, borderWidth:2, borderColor:'#fff' }] },
+        options:{ cutout:'62%', plugins:{ legend:{ position:'bottom', labels:{ padding:12 } } } },
+      });
+    }
+    function hbar(id, counts) {
+      new Chart(document.getElementById(id), {
+        type:'bar',
+        data:{ labels: counts.map(c => clip(c.value, 30)), datasets:[{ data: counts.map(c => c.count), backgroundColor:'#4F46E5', borderRadius:4, maxBarThickness:22 }] },
+        options:{ indexAxis:'y', plugins:{ legend:{ display:false } }, scales:{ x:{ ...AXIS, beginAtZero:true, precision:0 }, y:{ ...AXIS, grid:{ display:false } } } },
+      });
+    }
+
+    function npsPanel(nps) {
+      const seg = (v, cls) => v > 0 ? `<div class="${cls}" style="width:${v}%"></div>` : '';
+      return `
+        <div class="mt-4 p-4 rounded-xl border border-gray-100 bg-gray-50">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-semibold uppercase tracking-wide text-gray-500">Net Promoter Score</span>
+            <span class="text-2xl font-bold ${nps.score >= 0 ? 'text-emerald-600' : 'text-red-600'}" style="font-family:'Plus Jakarta Sans'">${nps.score > 0 ? '+' : ''}${nps.score}</span>
+          </div>
+          <div class="flex h-2.5 rounded-full overflow-hidden bg-gray-200">
+            ${seg(nps.detractors_pct, 'bg-red-500')}${seg(nps.passives_pct, 'bg-amber-400')}${seg(nps.promoters_pct, 'bg-emerald-500')}
+          </div>
+          <div class="flex justify-between text-[11px] text-gray-500 mt-2">
+            <span>Détracteurs ${nps.detractors} (${nps.detractors_pct}%)</span>
+            <span>Passifs ${nps.passives} (${nps.passives_pct}%)</span>
+            <span>Promoteurs ${nps.promoters} (${nps.promoters_pct}%)</span>
+          </div>
+        </div>`;
+    }
+  </script>
+</body>
+</html>

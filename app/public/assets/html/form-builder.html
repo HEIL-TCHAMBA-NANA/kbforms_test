@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Éditeur · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+  <style>
+    body{background:#fbfaff}
+    .bb-canvas{max-width:820px;margin:0 auto}
+
+    /* ── Section ─────────────────────────────────────────────── */
+    .bb-section{
+      background:linear-gradient(180deg,#faf8ff 0%, #ffffff 55%);
+      border:1px solid #efeafc;border-radius:22px;padding:20px;margin-bottom:22px;
+      box-shadow:0 1px 2px rgba(16,24,40,.04);
+    }
+    .bb-section-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+    .bb-section-title{
+      width:100%;border:1px solid transparent;border-radius:8px;padding:4px 8px;margin:-4px -8px 2px;
+      font-family:'Plus Jakarta Sans','Inter',sans-serif;font-weight:700;font-size:18px;color:#6D28D9;
+      background:transparent;transition:border-color .15s,background .15s;
+    }
+    .bb-section-title::placeholder{color:#c4b5fd}
+    .bb-section-title:hover{border-color:#ece7fb}
+    .bb-section-title:focus{outline:none;border-color:#a78bfa;background:#fff}
+    .bb-section-sub{
+      width:100%;border:1px solid transparent;border-radius:8px;padding:3px 8px;margin:0 -8px;
+      font-size:13px;color:#6b7280;background:transparent;transition:border-color .15s,background .15s;
+    }
+    .bb-section-sub::placeholder{color:#b6b8c2}
+    .bb-section-sub:hover{border-color:#eef0f4}
+    .bb-section-sub:focus{outline:none;border-color:#a78bfa;background:#fff}
+    .bb-section-actions{display:flex;gap:2px;flex-shrink:0}
+
+    /* ── Carte de champ ─────────────────────────────────────── */
+    .bb-fields{display:flex;flex-direction:column;gap:14px;margin-bottom:14px;min-height:8px}
+    .bb-field{
+      background:#fff;border:1px solid #ececf2;border-radius:16px;padding:16px 16px 14px;
+      box-shadow:0 1px 2px rgba(16,24,40,.04);transition:border-color .15s,box-shadow .15s;
+    }
+    .bb-field:focus-within{
+      border-color:#c4b5fd;
+      box-shadow:0 0 0 4px rgba(124,58,237,.12), 0 14px 34px -14px rgba(124,58,237,.28);
+    }
+    .bb-field-top{display:flex;align-items:center;gap:8px}
+    .bb-drag{color:#d1d5db;cursor:grab;font-size:13px;letter-spacing:-1px;padding:2px;user-select:none}
+    .bb-drag:hover{color:#9ca3af}
+    .bb-field-label{
+      flex:1;min-width:0;border:1px solid transparent;border-radius:8px;padding:6px 8px;margin-left:-4px;
+      font-weight:600;font-size:15px;color:#111827;background:transparent;transition:border-color .15s,background .15s;
+    }
+    .bb-field-label::placeholder{color:#9ca3af;font-weight:500}
+    .bb-field-label:hover{border-color:#eef0f4}
+    .bb-field-label:focus{outline:none;border-color:#a78bfa;background:#fbfaff}
+    .bb-field-type{
+      appearance:none;flex-shrink:0;border:1px solid #e5e7eb;border-radius:10px;
+      padding:7px 30px 7px 12px;font-size:13px;font-weight:500;color:#374151;cursor:pointer;background:#fff;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 9px center;transition:border-color .15s;
+    }
+    .bb-field-type:hover{border-color:#c4b5fd}
+    .bb-field-type:focus{outline:none;border-color:#a78bfa}
+    .bb-icon{
+      flex-shrink:0;display:inline-flex;padding:6px;border-radius:8px;color:#9ca3af;
+      background:transparent;border:none;cursor:pointer;transition:background .15s,color .15s;
+    }
+    .bb-icon svg{width:16px;height:16px}
+    .bb-icon:hover{background:#f3f4f6;color:#4b5563}
+    .bb-icon-danger:hover{background:#fef2f2;color:#dc2626}
+
+    .bb-field-preview{margin:12px 0 10px}
+    .bb-prev-input{
+      background:#f4f4f8;border:1px solid #ececf2;border-radius:12px;padding:11px 14px;
+      color:#9ca3af;font-size:14px;display:flex;align-items:center;justify-content:space-between;
+    }
+    .bb-prev-area{min-height:56px;align-items:flex-start}
+    .bb-prev-opt{display:flex;align-items:center;gap:9px;font-size:14px;color:#6b7280;padding:4px 0}
+    .bb-prev-radio,.bb-prev-check{width:16px;height:16px;border:2px solid #d1d5db;flex-shrink:0}
+    .bb-prev-radio{border-radius:50%}
+    .bb-prev-check{border-radius:5px}
+    .bb-prev-scale{display:flex;gap:8px;flex-wrap:wrap}
+    .bb-prev-scale span{
+      width:34px;height:34px;border:1px solid #e5e7eb;border-radius:8px;
+      display:flex;align-items:center;justify-content:center;font-size:13px;color:#9ca3af;
+    }
+    .bb-prev-grid{width:100%;border-collapse:collapse;font-size:13px;color:#9ca3af}
+    .bb-prev-grid th,.bb-prev-grid td{border:1px solid #ececf2;padding:6px 8px;text-align:center}
+    .bb-prev-grid th:first-child,.bb-prev-grid td:first-child{text-align:left;color:#6b7280}
+
+    .bb-field-help{
+      width:100%;border:1px dashed #e5e7eb;border-radius:10px;padding:8px 12px;
+      font-size:13px;color:#6b7280;background:#fbfbfd;transition:border-color .15s,background .15s;
+    }
+    .bb-field-help::placeholder{color:#b6b8c2}
+    .bb-field-help:hover{border-color:#d8d9e0}
+    .bb-field-help:focus{outline:none;border-color:#a78bfa;background:#fff}
+
+    .bb-field-bottom{display:flex;align-items:center;justify-content:space-between;margin-top:12px}
+    .bb-switch{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:#374151;font-weight:500;cursor:pointer}
+    .bb-switch input{position:absolute;opacity:0;pointer-events:none}
+    .bb-switch-track{
+      width:38px;height:22px;border-radius:999px;background:#d1d5db;position:relative;transition:background .2s;flex-shrink:0;
+    }
+    .bb-switch-track::after{
+      content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+      background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .2s;
+    }
+    .bb-switch input:checked + .bb-switch-track{background:#7C3AED}
+    .bb-switch input:checked + .bb-switch-track::after{transform:translateX(16px)}
+    .bb-switch input:focus-visible + .bb-switch-track{box-shadow:0 0 0 4px rgba(124,58,237,.2)}
+    .bb-advanced-btn{
+      display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#7C3AED;
+      background:transparent;border:none;cursor:pointer;padding:4px 6px;border-radius:8px;transition:background .15s;
+    }
+    .bb-advanced-btn:hover{background:#f6f2ff}
+    .bb-advanced-btn svg{width:14px;height:14px}
+
+    .bb-advanced{margin-top:14px;padding-top:14px;border-top:1px solid #f1f0f6}
+    .bb-adv-label{display:block;font-size:12px;font-weight:600;color:#6b7280;margin-bottom:8px}
+    .bb-adv-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    .bb-adv-input{
+      flex:1;border:1px solid #e5e7eb;border-radius:9px;padding:7px 11px;font-size:13px;color:#111827;background:#fff;
+    }
+    .bb-adv-input:focus{outline:none;border-color:#a78bfa;box-shadow:0 0 0 3px rgba(124,58,237,.1)}
+    .bb-adv-add{font-size:12px;font-weight:600;color:#7C3AED;background:none;border:none;cursor:pointer;padding:4px 0}
+    .bb-adv-empty{font-size:13px;color:#9ca3af;font-style:italic}
+
+    /* ── Boutons pointillés ─────────────────────────────────── */
+    .bb-add,.bb-add-section{
+      width:100%;border:1.5px dashed #c4b5fd;border-radius:14px;padding:13px;
+      color:#7C3AED;font-weight:600;font-size:14px;background:transparent;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s,border-color .15s;
+    }
+    .bb-add:hover,.bb-add-section:hover{background:#faf5ff;border-color:#a78bfa}
+    .bb-add svg,.bb-add-section svg{width:16px;height:16px}
+    .bb-add-section{padding:16px;border-radius:18px;margin-bottom:40px}
+
+    .sortable-ghost{opacity:.4}
+    .sortable-drag .bb-field{box-shadow:0 20px 40px -12px rgba(124,58,237,.35)}
+
+    /* ── Image d'en-tête ────────────────────────────────────────── */
+    #bb-banner{margin-bottom:18px}
+    .bb-banner-empty{
+      width:100%;height:110px;border:1.5px dashed #c4b5fd;border-radius:18px;background:#faf7ff;
+      color:#7C3AED;font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:background .15s
+    }
+    .bb-banner-empty:hover{background:#f3ecff}
+    .bb-banner-img{
+      position:relative;height:200px;border-radius:18px;background-size:cover;background-position:center;
+      box-shadow:0 1px 2px rgba(16,24,40,.06);border:1px solid #ececf2
+    }
+    .bb-banner-actions{position:absolute;top:12px;right:12px;display:flex;gap:8px;opacity:0;transition:opacity .15s}
+    .bb-banner-img:hover .bb-banner-actions{opacity:1}
+    .bb-banner-btn{
+      background:rgba(255,255,255,.96);border:none;border-radius:9px;padding:6px 12px;font-size:13px;font-weight:600;
+      color:#374151;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.18)
+    }
+    .bb-banner-btn:hover{background:#fff}
+    .bb-banner-btn-danger{color:#dc2626}
+  </style>
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- Top bar builder -->
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3 min-w-0">
+      <a href="/forms" aria-label="Retour" class="p-2 rounded-md hover:bg-gray-100 text-gray-600"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg></a>
+      <a href="/dashboard" aria-label="KBForms" class="shrink-0"><img src="/assets/images/kbforms-mark.svg" alt="KBForms" class="w-8 h-8"></a>
+      <input id="form-title-input" onblur="updateFormMeta()" class="font-semibold text-gray-900 bg-transparent border border-transparent hover:border-gray-200 focus:border-indigo-500 rounded-md px-2 py-1 text-sm md:text-base min-w-0 max-w-[40ch] outline-none" />
+      <span id="save-status" class="text-xs text-gray-400 hidden md:inline-flex items-center gap-1">Sauvegardé</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <a id="preview-btn" href="#" target="_blank" class="btn btn-secondary btn-sm">Aperçu</a>
+      <a id="settings-btn" href="#" class="btn btn-secondary btn-sm">Paramètres</a>
+      <button onclick="publishForm()" class="btn btn-primary btn-sm">Publier</button>
+    </div>
+  </header>
+
+  <main class="px-4 py-8">
+    <div class="bb-canvas">
+      <div id="bb-banner"></div>
+      <input type="file" id="bb-banner-file" accept="image/png,image/jpeg,image/webp" class="hidden" onchange="onBannerFile(event)" />
+      <div class="mb-6">
+        <input id="form-title-inline" onblur="syncTitleFromInline()" placeholder="Titre du formulaire"
+          class="w-full bg-transparent border-none outline-none text-2xl font-extrabold text-gray-900 mb-1"
+          style="font-family:'Plus Jakarta Sans','Inter',sans-serif" />
+        <textarea id="form-desc" onblur="updateFormMeta()" rows="1" placeholder="Description du formulaire (optionnel)…"
+          class="w-full text-sm text-gray-500 bg-transparent border-none outline-none resize-none focus:ring-0"></textarea>
+      </div>
+      <div id="bb-canvas"></div>
+    </div>
+  </main>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/form-builder.js"></script>
+  <script>
+    (async () => {
+      if (!KBF_AUTH.requireAuth()) return;
+      const formId = Number(getQueryParam('id'));
+      if (!formId) { showToast('Formulaire introuvable', 'error'); setTimeout(() => location.href = '/forms', 1500); return; }
+      document.getElementById('settings-btn').href = `/form-settings?id=${formId}`;
+      try {
+        await loadFormMeta(formId);
+        await KBF.builder.init(formId);
+      } catch (err) {
+        console.error('[builder boot]', err);
+        showToast('Erreur de chargement du builder', 'error');
+      }
+    })();
+
+    function extractToken(shareLink) {
+      if (!shareLink) return null;
+      const match = shareLink.match(/\/f\/([a-zA-Z0-9]+)$/);
+      return match ? match[1] : null;
+    }
+
+    function updatePreviewLink() {
+      const f = KBF.currentForm;
+      const token = extractToken(f?.share_link);
+      const previewBtn = document.getElementById('preview-btn');
+      if (token) {
+        previewBtn.href = `/f/${token}`;
+        previewBtn.title = `Lien public : ${location.origin}/f/${token}`;
+      } else {
+        previewBtn.href = `/form-public?id=${f?.id}&preview=1`;
+        previewBtn.title = 'Aperçu (formulaire non publié)';
+      }
+    }
+
+    async function loadFormMeta(id) {
+      const { ok, data } = await KBF_API.get(`/forms/${id}`);
+      if (ok && data) {
+        const f = data.form || data;
+        KBF.currentForm = f;
+        document.getElementById('form-title-input').value = f.title || 'Sans titre';
+        document.getElementById('form-title-inline').value = f.title || '';
+        document.getElementById('form-desc').value = f.description || '';
+        updatePreviewLink();
+        renderBanner();
+        const saveStatus = document.getElementById('save-status');
+        if (f.is_published) {
+          saveStatus.textContent = '● Publié';
+          saveStatus.className = 'text-xs text-emerald-600 hidden md:inline';
+        }
+      }
+    }
+
+    // ── Image d'en-tête ──────────────────────────────────────────────────
+    function renderBanner() {
+      const el = document.getElementById('bb-banner');
+      if (!el) return;
+      const img = KBF.currentForm && KBF.currentForm.header_image;
+      if (img) {
+        el.innerHTML =
+          '<div class="bb-banner-img" style="background-image:url(\'' + String(img).replace(/'/g, "%27") + '\')">' +
+            '<div class="bb-banner-actions">' +
+              '<button type="button" class="bb-banner-btn" onclick="pickBanner()">Changer</button>' +
+              '<button type="button" class="bb-banner-btn bb-banner-btn-danger" onclick="removeBanner()">Retirer</button>' +
+            '</div>' +
+          '</div>';
+      } else {
+        el.innerHTML =
+          '<button type="button" class="bb-banner-empty" onclick="pickBanner()">' +
+            kbIcon('palette', 'w-5 h-5') + " Ajouter une image d'en-tête" +
+          '</button>';
+      }
+    }
+
+    function pickBanner() {
+      const inp = document.getElementById('bb-banner-file');
+      inp.value = '';
+      inp.click();
+    }
+
+    function resizeImage(file, maxW = 1600, quality = 0.82) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          const scale = Math.min(1, maxW / img.width);
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          resolve(c.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible')); };
+        img.src = url;
+      });
+    }
+
+    async function onBannerFile(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) { showToast('Fichier non image', 'error'); return; }
+      if (file.size > 10 * 1024 * 1024) { showToast('Image trop lourde (max 10 Mo)', 'error'); return; }
+      setSaveStatus(null, "Traitement de l'image…");
+      let dataUri;
+      try { dataUri = await resizeImage(file); }
+      catch (err) { setSaveStatus(false); showToast(err.message || 'Erreur', 'error'); return; }
+      const { ok, data } = await KBF_API.patch(`/forms/${KBF.currentForm.id}/theme`, { header_image: dataUri });
+      if (ok) { KBF.currentForm.header_image = dataUri; renderBanner(); setSaveStatus(true); }
+      else { setSaveStatus(false); showToast((data && (data.errors && data.errors[0] || data.error)) || 'Échec de l\'envoi', 'error'); }
+    }
+
+    async function removeBanner() {
+      const { ok } = await KBF_API.patch(`/forms/${KBF.currentForm.id}/theme`, { header_image: null });
+      if (ok) { KBF.currentForm.header_image = null; renderBanner(); setSaveStatus(true); }
+      else { setSaveStatus(false); showToast('Échec', 'error'); }
+    }
+
+    function syncTitleFromInline() {
+      document.getElementById('form-title-input').value = document.getElementById('form-title-inline').value;
+      updateFormMeta();
+    }
+
+    async function updateFormMeta() {
+      if (!KBF.currentForm?.id) return;
+      const title       = document.getElementById('form-title-input').value;
+      const description = document.getElementById('form-desc').value;
+      document.getElementById('form-title-inline').value = title;
+      setSaveStatus(null, 'Sauvegarde…');
+      const { ok } = await KBF_API.put(`/forms/${KBF.currentForm.id}`, { title, description });
+      setSaveStatus(ok);
+    }
+
+    function setSaveStatus(ok, textOverride) {
+      const el = document.getElementById('save-status');
+      if (!el) return;
+      if (textOverride) { el.textContent = textOverride; el.className = 'text-xs text-gray-400 hidden md:inline'; return; }
+      if (ok === false) { el.textContent = 'Erreur sauvegarde'; el.className = 'text-xs text-red-500 hidden md:inline'; return; }
+      el.innerHTML = kbIcon('check', 'w-3.5 h-3.5') + '<span>Sauvegardé</span>';
+      el.className = 'text-xs text-emerald-600 hidden md:inline-flex items-center gap-1';
+    }
+    window.setSaveStatus = setSaveStatus;
+
+    async function publishForm() {
+      if (!KBF.currentForm?.id) { showToast('Formulaire non chargé, veuillez patienter', 'error'); return; }
+      const btn = document.querySelector('[onclick="publishForm()"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Publication…'; }
+      const { ok, data } = await KBF_API.post(`/forms/${KBF.currentForm.id}/publish`, {});
+      if (btn) { btn.disabled = false; btn.textContent = 'Publier'; }
+      if (ok) {
+        KBF.currentForm.share_link = data?.share_link || KBF.currentForm.share_link;
+        KBF.currentForm.is_published = 1;
+        updatePreviewLink();
+        const link = data?.share_link || '';
+        const token = extractToken(link);
+        const publicUrl = link || (token ? `${location.origin}/f/${token}` : '');
+        showToast('Formulaire publié ! Lien copié.');
+        if (publicUrl) {
+          try { await navigator.clipboard.writeText(publicUrl); }
+          catch {
+            const ta = document.createElement('textarea');
+            ta.value = publicUrl; ta.style.cssText = 'position:fixed;top:-9999px;opacity:0';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+          }
+        }
+        const saveStatus = document.getElementById('save-status');
+        saveStatus.textContent = '● Publié';
+        saveStatus.className = 'text-xs text-emerald-600 hidden md:inline';
+      } else {
+        showToast(data?.error || 'Erreur lors de la publication', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Réponses · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-7xl w-full mx-auto animate-fade-in">
+
+      <div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-4 flex flex-col md:flex-row md:items-center gap-3 justify-between">
+        <div>
+          <h2 id="form-title" class="text-lg font-semibold text-gray-900">Chargement…</h2>
+          <div class="text-xs text-gray-500"><span id="resp-count">0</span> réponses</div>
+        </div>
+        <div class="flex gap-2">
+          <input id="search" oninput="onSearch()" type="text" placeholder="Rechercher…" class="fld" />
+          <button onclick="exportCsv()" class="btn btn-secondary btn-sm">Exporter CSV</button>
+          <button onclick="loadResponses()" class="btn btn-primary btn-sm">Actualiser</button>
+        </div>
+      </div>
+
+      <div class="inline-flex bg-gray-100 p-1 rounded-lg mb-4">
+        <button onclick="setTab('all')" id="tab-all" class="px-3 py-1.5 text-sm rounded bg-white shadow-sm font-medium">Toutes</button>
+        <button onclick="setTab('byq')" id="tab-byq" class="px-3 py-1.5 text-sm rounded text-gray-600">Par question</button>
+        <button onclick="setTab('summary')" id="tab-summary" class="px-3 py-1.5 text-sm rounded text-gray-600">Résumé</button>
+      </div>
+
+      <div id="content"><div class="kb-skeleton h-64"></div></div>
+    </main>
+  </div>
+
+  <!-- Drawer detail -->
+  <div id="drawer" class="hidden fixed inset-0 z-40">
+    <div class="absolute inset-0 kb-drawer-backdrop" onclick="closeDrawer()"></div>
+    <aside class="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white shadow-2xl flex flex-col animate-slide-in">
+      <div class="flex items-center justify-between p-4 border-b border-gray-200">
+        <h3 id="drawer-title" class="font-semibold">Réponse</h3>
+        <button onclick="closeDrawer()" aria-label="Fermer" class="text-gray-400 hover:text-gray-700"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div id="drawer-body" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+      <div class="p-4 border-t border-gray-200 space-y-2">
+        <div id="drawer-edit-actions" class="flex gap-2"></div>
+        <button id="drawer-delete" class="w-full btn btn-danger btn-sm">Supprimer cette réponse</button>
+      </div>
+    </aside>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    const formId = Number(getQueryParam('id'));
+    let questions = [];
+    let responses = [];
+    let tab = 'all';
+    let page = 1;
+    const PER_PAGE = 20;
+    let sortCol = 'created_at'; // colonne de tri active
+    let sortDir = 'desc';       // 'asc' | 'desc'
+    let currentDrawerId = null, currentDrawerDetail = null, editMode = false;
+    const NON_EDITABLE_TYPES = ['grid', 'signature', 'audio', 'video', 'calculated'];
+
+    if (KBF_AUTH.requireAuth()) {
+      if (!formId) { location.href = '/forms'; }
+      renderSidebar('forms');
+      renderTopBar({ title: 'Réponses', actions: `<a href="/form-builder?id=${formId}" class="text-sm text-indigo-600 font-medium">← Builder</a>` });
+      loadAll();
+    }
+
+    async function loadAll() {
+      const [meta, qs, rs] = await Promise.all([
+        KBF_API.get(`/forms/${formId}`),
+        KBF_API.get(`/forms/${formId}/questions`),
+        KBF_API.get(`/forms/${formId}/responses`)
+      ]);
+      const f = meta.data?.form || meta.data || {};
+      document.getElementById('form-title').textContent = f.title || 'Formulaire';
+      questions = (Array.isArray(qs.data)) ? qs.data : (qs.data?.questions || []);
+      responses = (Array.isArray(rs.data)) ? rs.data : (rs.data?.responses || []);
+      document.getElementById('resp-count').textContent = responses.length;
+      render();
+    }
+
+    const onSearch = debounce(() => render(), 300);
+
+    async function loadResponses() { await loadAll(); showToast('Actualisé'); }
+
+    function setTab(t) {
+      tab = t;
+      ['all','byq','summary'].forEach(x => {
+        document.getElementById('tab-'+x).className = (x===t) ? 'px-3 py-1.5 text-sm rounded bg-white shadow-sm font-medium' : 'px-3 py-1.5 text-sm rounded text-gray-600';
+      });
+      render();
+    }
+
+    function getAnswer(resp, qid) {
+      const a = (resp.answers || []).find(x => x.question_id == qid);
+      if (!a) return '';
+      const v = a.value;
+      return Array.isArray(v) ? v.join(', ') : (v ?? '');
+    }
+
+    /** Toutes les occurrences d'une question (plusieurs si groupe répétable), triées. */
+    function answerOccurrences(resp, qid) {
+      return (resp.answers || [])
+        .filter(x => x.question_id == qid)
+        .sort((a, b) => (a.repeat_index ?? -1) - (b.repeat_index ?? -1));
+    }
+
+    /** Aperçu compact pour une cellule du tableau : image/audio/vidéo détectés, groupes répétables comptés. */
+    function answerPreviewCell(resp, qid) {
+      const occ = answerOccurrences(resp, qid);
+      if (!occ.length) return '<span class="text-gray-300">—</span>';
+      if (occ.length > 1) return `<span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">${occ.length} réponses</span>`;
+      const v = occ[0].value;
+      if (typeof v === 'string' && v.startsWith('data:image')) return `<img src="${escapeHtml(v)}" class="w-8 h-8 rounded object-cover inline-block" alt="">`;
+      if (typeof v === 'string' && v.startsWith('data:audio')) return '🔊 Audio';
+      if (typeof v === 'string' && v.startsWith('data:video')) return '🎬 Vidéo';
+      return escapeHtml(truncate(String(Array.isArray(v) ? v.join(', ') : (v ?? '')), 60));
+    }
+
+    function sortBy(col) {
+      if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      else { sortCol = col; sortDir = 'asc'; }
+      page = 1;
+      render();
+    }
+
+    function sortIcon(col) {
+      if (sortCol !== col) return kbIcon('sort', 'w-3.5 h-3.5 inline-block align-[-2px] ml-1 text-gray-300');
+      return sortDir === 'asc'
+        ? kbIcon('chevron-up', 'w-3.5 h-3.5 inline-block align-[-2px] ml-1 text-indigo-500')
+        : kbIcon('chevron-down', 'w-3.5 h-3.5 inline-block align-[-2px] ml-1 text-indigo-500');
+    }
+
+        function render() {
+      const search = document.getElementById('search').value.toLowerCase();
+      const filtered = responses
+        .filter(r => JSON.stringify(r).toLowerCase().includes(search))
+        .sort((a, b) => {
+          let va = sortCol === 'id' ? a.id : (a.created_at || '');
+          let vb = sortCol === 'id' ? b.id : (b.created_at || '');
+          if (va < vb) return sortDir === 'asc' ? -1 : 1;
+          if (va > vb) return sortDir === 'asc' ? 1 : -1;
+          return 0;
+        });
+      const mount = document.getElementById('content');
+
+      if (!filtered.length) {
+        mount.innerHTML = `<div class="text-center py-16 bg-white rounded-2xl border border-gray-200"><div class="flex justify-center mb-3 text-gray-300">${kbIcon('inbox','w-12 h-12')}</div><p class="text-gray-500">Aucune réponse pour le moment</p></div>`;
+        return;
+      }
+
+      if (tab === 'all') {
+        const start = (page-1) * PER_PAGE;
+        const pageItems = filtered.slice(start, start + PER_PAGE);
+        mount.innerHTML = `
+          <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th class="text-left px-4 py-3 cursor-pointer select-none hover:bg-gray-100" onclick="sortBy('id')"># ${sortIcon('id')}</th>
+                  <th class="text-left px-4 py-3 cursor-pointer select-none hover:bg-gray-100" onclick="sortBy('created_at')">Date ${sortIcon('created_at')}</th>
+                  ${questions.map(q => `<th class="text-left px-4 py-3 truncate max-w-[200px]">${escapeHtml(q.label)}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                ${pageItems.map(r => `
+                  <tr class="hover:bg-gray-50 cursor-pointer" onclick="openDrawer(${r.response_id})">
+                    <td class="px-4 py-3 font-medium">#${r.response_id}</td>
+                    <td class="px-4 py-3 text-gray-500">${formatDate(r.submitted_at, true)}${r.media_count ? ' <span title="Pièce(s) jointe(s)">📎</span>' : ''}</td>
+                    ${questions.map(q => `<td class="px-4 py-3 text-gray-700 truncate max-w-[240px]">${answerPreviewCell(r, q.id)}</td>`).join('')}
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+          ${renderPager(filtered.length)}`;
+      } else if (tab === 'byq') {
+        mount.innerHTML = `<div class="space-y-3">${questions.map(q => `
+          <details class="bg-white rounded-2xl border border-gray-200">
+            <summary class="cursor-pointer p-4 font-medium">${escapeHtml(q.label)} <span class="text-xs text-gray-400">(${filtered.length} réponses)</span></summary>
+            <ul class="px-6 py-3 space-y-1 text-sm">
+              ${filtered.map(r => `<li class="text-gray-700">• ${answerPreviewCell(r, q.id)}</li>`).join('')}
+            </ul>
+          </details>`).join('')}</div>`;
+      } else {
+        mount.innerHTML = `<div class="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <h3 class="font-semibold mb-3">Résumé</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div><div class="text-gray-500">Total</div><div class="text-2xl font-bold">${filtered.length}</div></div>
+            <div><div class="text-gray-500">Première</div><div class="font-medium">${formatDate(filtered[filtered.length-1]?.created_at)}</div></div>
+            <div><div class="text-gray-500">Dernière</div><div class="font-medium">${formatDate(filtered[0]?.created_at)}</div></div>
+            <div><div class="text-gray-500">Questions</div><div class="text-2xl font-bold">${questions.length}</div></div>
+          </div>
+        </div>`;
+      }
+    }
+
+    function renderPager(total) {
+      const pages = Math.ceil(total / PER_PAGE);
+      if (pages <= 1) return '';
+      let html = '<div class="flex justify-center gap-1 mt-4">';
+      for (let i = 1; i <= pages; i++) {
+        html += `<button onclick="page=${i};render()" class="px-3 py-1 text-sm rounded ${i===page?'bg-indigo-600 text-white':'bg-white border border-gray-200'}">${i}</button>`;
+      }
+      return html + '</div>';
+    }
+
+    // ── Détail d'une réponse (chargé à la demande : GET /responses/{id}) ──────
+    // Porte les pièces jointes (response_media) et les occurrences des groupes
+    // répétables, absentes de la liste en masse GET /forms/{id}/responses.
+    async function openDrawer(responseId) {
+      currentDrawerId = responseId;
+      editMode = false;
+      document.getElementById('drawer').classList.remove('hidden');
+      document.getElementById('drawer-title').textContent = `#${responseId}`;
+      document.getElementById('drawer-body').innerHTML = '<div class="kb-skeleton h-12 rounded-lg"></div><div class="kb-skeleton h-12 rounded-lg mt-2"></div><div class="kb-skeleton h-12 rounded-lg mt-2"></div>';
+      document.getElementById('drawer-edit-actions').innerHTML = '';
+
+      const { ok, data } = await KBF_API.get(`/responses/${responseId}`);
+      if (!ok || !data?.success) {
+        document.getElementById('drawer-body').innerHTML = '<p class="text-sm text-red-500">Impossible de charger cette réponse.</p>';
+        return;
+      }
+      currentDrawerDetail = data;
+      document.getElementById('drawer-title').textContent = `#${responseId} · ${formatDate(data.response?.submitted_at, true)}`;
+      document.getElementById('drawer-delete').onclick = () => deleteResponse(responseId);
+      renderDrawerBody();
+    }
+
+    function renderAnswerValue(value) {
+      if (typeof value === 'string' && value.startsWith('data:image')) {
+        return `<img src="${escapeHtml(value)}" class="max-h-48 rounded-lg border border-gray-200" alt="">`;
+      }
+      if (typeof value === 'string' && value.startsWith('data:audio')) {
+        return `<audio src="${escapeHtml(value)}" controls class="w-full"></audio>`;
+      }
+      if (typeof value === 'string' && value.startsWith('data:video')) {
+        return `<video src="${escapeHtml(value)}" controls class="max-h-56 rounded-lg w-full"></video>`;
+      }
+      let display = value;
+      if (typeof value === 'string' && value.startsWith('[')) {
+        try { const arr = JSON.parse(value); if (Array.isArray(arr)) display = arr.join(', '); } catch (_) {}
+      }
+      return escapeHtml(display === null || display === undefined || display === '' ? '—' : String(display));
+    }
+
+    function renderMediaItem(m) {
+      const mime = m.mime || '';
+      if (mime.startsWith('image/')) return `<img src="${escapeHtml(m.data)}" class="max-h-48 rounded-lg border border-gray-200" alt="">`;
+      if (mime.startsWith('audio/')) return `<audio src="${escapeHtml(m.data)}" controls class="w-full"></audio>`;
+      if (mime.startsWith('video/')) return `<video src="${escapeHtml(m.data)}" controls class="max-h-56 rounded-lg w-full"></video>`;
+      return `<a href="${escapeHtml(m.data)}" download class="text-indigo-600 text-xs underline">Pièce jointe (${escapeHtml(mime || 'fichier')})</a>`;
+    }
+
+    function renderEditField(q, rawValue) {
+      const id = `edit-q-${q.id}`;
+      const value = rawValue ?? '';
+      switch (q.type) {
+        case 'long_text':
+          return `<textarea id="${id}" rows="3" class="fld w-full">${escapeHtml(value)}</textarea>`;
+        case 'dropdown':
+          return `<select id="${id}" class="fld w-full">${(q.options || []).map(o => `<option ${o === value ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>`;
+        case 'radio':
+          return `<div class="space-y-1">${(q.options || []).map(o => `<label class="flex items-center gap-2"><input type="radio" name="${id}" value="${escapeHtml(o)}" ${o === value ? 'checked' : ''}><span class="text-sm">${escapeHtml(o)}</span></label>`).join('')}</div>`;
+        case 'checkbox': {
+          let arr = [];
+          if (Array.isArray(value)) arr = value;
+          else if (typeof value === 'string' && value.startsWith('[')) { try { arr = JSON.parse(value); } catch (_) { arr = []; } }
+          return `<div class="space-y-1">${(q.options || []).map(o => `<label class="flex items-center gap-2"><input type="checkbox" class="cb-${id}" value="${escapeHtml(o)}" ${arr.includes(o) ? 'checked' : ''}><span class="text-sm">${escapeHtml(o)}</span></label>`).join('')}</div>`;
+        }
+        case 'date':
+          return `<input id="${id}" type="date" value="${escapeHtml(value)}" class="fld">`;
+        case 'time':
+          return `<input id="${id}" type="time" value="${escapeHtml(value)}" class="fld">`;
+        default:
+          return `<input id="${id}" type="text" value="${escapeHtml(value)}" class="fld w-full">`;
+      }
+    }
+
+    function isEditableType(q) {
+      return !q.repeat_group_id && !NON_EDITABLE_TYPES.includes(q.type);
+    }
+
+    function renderDrawerBody() {
+      const detail = currentDrawerDetail;
+      const answers = detail.answers || [];
+      const media   = detail.media   || [];
+
+      const byQ = {};
+      answers.forEach(a => { (byQ[a.question_id] = byQ[a.question_id] || []).push(a); });
+      Object.values(byQ).forEach(arr => arr.sort((a, b) => (a.repeat_index ?? -1) - (b.repeat_index ?? -1)));
+      const mediaByQ = {};
+      media.forEach(m => { (mediaByQ[m.question_id] = mediaByQ[m.question_id] || []).push(m); });
+
+      const blocks = questions.map(q => {
+        const occ  = byQ[q.id] || [];
+        const meds = mediaByQ[q.id] || [];
+        if (!occ.length && !meds.length) return '';
+
+        let body;
+        if (editMode && isEditableType(q)) {
+          body = renderEditField(q, occ[0] ? occ[0].value : '');
+        } else if (occ.some(a => a.repeat_index !== null)) {
+          body = occ.map((a, i) => `
+            <div class="mb-2">
+              <div class="text-[11px] text-gray-400 mb-0.5">Occurrence ${(a.repeat_index ?? i) + 1}</div>
+              ${renderAnswerValue(a.value)}
+            </div>`).join('');
+        } else {
+          body = occ.map(a => renderAnswerValue(a.value)).join('') || '<span class="text-gray-400">—</span>';
+        }
+
+        const medHtml = meds.map(m => `<div class="mt-2">${renderMediaItem(m)}</div>`).join('');
+        return `
+          <div class="py-3 border-b border-gray-50 last:border-0">
+            <div class="text-xs uppercase text-gray-500 font-semibold mb-1">${escapeHtml(q.label)}</div>
+            <div class="text-sm text-gray-800">${body}</div>
+            ${medHtml}
+          </div>`;
+      }).join('');
+
+      document.getElementById('drawer-body').innerHTML = blocks || '<p class="text-sm text-gray-400 italic">Aucune réponse enregistrée.</p>';
+      document.getElementById('drawer-edit-actions').innerHTML = editMode
+        ? `<button onclick="saveDrawerEdit()" class="btn btn-primary btn-sm flex-1">Enregistrer</button>
+           <button onclick="cancelDrawerEdit()" class="btn btn-secondary btn-sm flex-1">Annuler</button>`
+        : `<button onclick="startDrawerEdit()" class="btn btn-secondary btn-sm w-full">Modifier cette réponse</button>`;
+    }
+
+    function startDrawerEdit()  { editMode = true;  renderDrawerBody(); }
+    function cancelDrawerEdit() { editMode = false; renderDrawerBody(); }
+
+    /**
+     * Reconstruit le tableau complet des réponses à envoyer : les questions
+     * non éditables (groupes répétables, grille, signature, audio/vidéo,
+     * champ calculé) sont renvoyées telles quelles pour ne pas les perdre —
+     * PUT /responses/{id} remplace TOUTES les réponses.
+     */
+    function collectDrawerAnswers() {
+      const result = (currentDrawerDetail.answers || []).map(a => ({
+        question_id: a.question_id, value: a.value, repeat_index: a.repeat_index
+      }));
+      questions.forEach(q => {
+        if (!isEditableType(q)) return;
+        let value;
+        if (q.type === 'checkbox') {
+          const boxes = document.querySelectorAll(`.cb-edit-q-${q.id}`);
+          value = JSON.stringify(Array.from(boxes).filter(b => b.checked).map(b => b.value));
+        } else if (q.type === 'radio') {
+          const checked = document.querySelector(`input[name="edit-q-${q.id}"]:checked`);
+          value = checked ? checked.value : '';
+        } else {
+          const el = document.getElementById(`edit-q-${q.id}`);
+          if (!el) return; // question sans réponse existante, pas éditée
+          value = el.value;
+        }
+        const idx = result.findIndex(r => r.question_id === q.id && r.repeat_index === null);
+        if (idx === -1) result.push({ question_id: q.id, value, repeat_index: null });
+        else result[idx].value = value;
+      });
+      return result;
+    }
+
+    async function saveDrawerEdit() {
+      const answers = collectDrawerAnswers();
+      const { ok, data } = await KBF_API.put(`/responses/${currentDrawerId}`, { answers });
+      if (ok && data?.success) {
+        showToast('Réponse mise à jour');
+        editMode = false;
+        await openDrawer(currentDrawerId);
+        loadAll();
+      } else {
+        showToast(data?.error || 'Erreur lors de la mise à jour', 'error');
+      }
+    }
+    function closeDrawer() { document.getElementById('drawer').classList.add('hidden'); editMode = false; currentDrawerId = null; currentDrawerDetail = null; }
+
+    async function deleteResponse(id) {
+      if (!confirm(`Supprimer définitivement la réponse #${id} ? Cette action est irréversible.`)) return;
+      const { ok, data } = await KBF_API.delete(`/responses/${id}`);
+      if (ok && data?.success) {
+        showToast("Réponse supprimée");
+        closeDrawer();
+        loadAll();
+      } else {
+        showToast(data?.error || 'Suppression impossible', 'error');
+      }
+    }
+
+    async function exportCsv() {
+      try { await KBF_API.download(`/forms/${formId}/export/csv`, `responses-${formId}.csv`); showToast('Téléchargement lancé'); }
+      catch { showToast('Erreur d’export', 'error'); }
+    }
+  </script>
+</body>
+</html>

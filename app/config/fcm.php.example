@@ -1,0 +1,21 @@
+<?php
+// ── Firebase Cloud Messaging (notifications push mobiles) ────────────────────
+// Copier en `fcm.php` et renseigner.
+//
+// 1. console.firebase.google.com → créer / ouvrir le projet
+//    (peut réutiliser le projet Google Cloud existant).
+// 2. ⚙ Paramètres du projet → onglet « Comptes de service »
+//    → « Générer une nouvelle clé privée » → télécharge un JSON.
+// 3. Déposer ce JSON dans app/config/ (ex. kbforms-fcm-key.json) et pointer
+//    `service_account_json` dessus. Le fichier NE DOIT PAS être versionné.
+//
+// Sans config valide : les push sont désactivés, le reste fonctionne.
+// Override par env : KBF_FCM_SERVICE_ACCOUNT_JSON
+return [
+    'service_account_json' => __DIR__ . '/kbforms-fcm-key.json',
+    // 'service_account'   => [
+    //     'project_id'   => 'xxxx',
+    //     'client_email' => 'firebase-adminsdk-xxx@xxxx.iam.gserviceaccount.com',
+    //     'private_key'  => "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+    // ],
+];

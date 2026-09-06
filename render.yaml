@@ -1,0 +1,54 @@
+# Blueprint Render — service web KBForms (Docker, plan gratuit).
+# La base MySQL n'est PAS gérée ici (Render ne fait pas de MySQL gratuit) :
+# créer une base sur Aiven (gratuit, sans carte) et renseigner KBF_DB_* dans
+# le dashboard Render. Voir tools/DEPLOY_RENDER.md.
+#
+# Les variables `sync: false` ne sont PAS stockées dans le dépôt : les saisir
+# dans Render → service → Environment.
+
+services:
+  - type: web
+    name: kbforms
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /templates      # renvoie 401 (pas 5xx) → service considéré sain
+    envVars:
+      - key: KBF_BASE_URL            # ex. https://kbforms.onrender.com
+        sync: false
+      - key: KBF_DB_HOST             # hôte MySQL Aiven
+        sync: false
+      - key: KBF_DB_NAME             # "defaultdb" chez Aiven
+        sync: false
+      - key: KBF_DB_USER             # "avnadmin" chez Aiven
+        sync: false
+      - key: KBF_DB_PASS
+        sync: false
+      - key: KBF_DB_PORT_NOTE        # info : le port Aiven (non-3306) se met dans KBF_DB_HOST => "host:port" NON supporté
+        value: "mettre le port dans KBF_DB_HOST est impossible ; voir note DEPLOY_RENDER"
+      - key: KBF_DB_SSL
+        value: "1"
+      - key: KBF_DB_SSL_CA          # chemin du CA Aiven (Secret File Render). Sinon, retirer et mettre KBF_DB_SSL_NO_VERIFY=1
+        sync: false
+      - key: KBF_MOBILE_CLIENT_SECRET
+        sync: false
+      - key: MAIL_DRIVER
+        value: smtp
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_ENCRYPTION
+        value: tls
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD          # mot de passe d'application Gmail
+        sync: false
+      - key: MAIL_FROM_EMAIL
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: KBForms
+      - key: RECAPTCHA_SITE_KEY     # clés reCAPTCHA v2 pour le domaine onrender.com ; laisser vide pour désactiver
+        sync: false
+      - key: RECAPTCHA_SECRET_KEY
+        sync: false

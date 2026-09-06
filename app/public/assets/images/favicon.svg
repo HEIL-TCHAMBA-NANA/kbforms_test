@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="KBForms">
+  <defs>
+    <linearGradient id="kbfFav" x1="3" y1="1" x2="37" y2="39" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset=".55" stop-color="#7C63EF"/>
+      <stop offset="1" stop-color="#9333EA"/>
+    </linearGradient>
+  </defs>
+  <rect width="40" height="40" rx="9" fill="url(#kbfFav)"/>
+  <g fill="none" stroke="#fff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7.5 10v20"/>
+    <path d="M7.5 20 15.5 12"/>
+    <path d="M7.5 20 16.3 30"/>
+    <path d="M22.5 10v20"/>
+    <path d="M22.5 10h4.6a4.6 4.6 0 0 1 0 9.2H22.5"/>
+    <path d="M22.5 19.6h5.2a5 5 0 0 1 0 10H22.5"/>
+  </g>
+  <circle cx="17.3" cy="10.2" r="2.6" fill="#fff"/>
+</svg>
