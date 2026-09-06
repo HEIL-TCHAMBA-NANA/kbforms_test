@@ -16,7 +16,9 @@ services:
     envVars:
       - key: KBF_BASE_URL            # ex. https://kbforms.onrender.com
         sync: false
-      - key: KBF_DB_HOST             # hôte MySQL Aiven
+      - key: KBF_DB_HOST             # hôte MySQL Aiven (mysql-xxxx.aivencloud.com)
+        sync: false
+      - key: KBF_DB_PORT             # port Aiven (5 chiffres, PAS 3306)
         sync: false
       - key: KBF_DB_NAME             # "defaultdb" chez Aiven
         sync: false
@@ -24,12 +26,8 @@ services:
         sync: false
       - key: KBF_DB_PASS
         sync: false
-      - key: KBF_DB_PORT_NOTE        # info : le port Aiven (non-3306) se met dans KBF_DB_HOST => "host:port" NON supporté
-        value: "mettre le port dans KBF_DB_HOST est impossible ; voir note DEPLOY_RENDER"
-      - key: KBF_DB_SSL
+      - key: KBF_DB_SSL_NO_VERIFY    # "1" : TLS obligatoire vers Aiven, sans vérifier le CA privé (suffisant pour un pilote)
         value: "1"
-      - key: KBF_DB_SSL_CA          # chemin du CA Aiven (Secret File Render). Sinon, retirer et mettre KBF_DB_SSL_NO_VERIFY=1
-        sync: false
       - key: KBF_MOBILE_CLIENT_SECRET
         sync: false
       - key: MAIL_DRIVER

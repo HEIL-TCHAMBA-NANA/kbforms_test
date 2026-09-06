@@ -17,7 +17,8 @@ RUN set -eux; \
 RUN set -eux; \
     sed -ri 's!DocumentRoot /var/www/html!DocumentRoot /var/www/html/app/public!' /etc/apache2/sites-available/000-default.conf; \
     printf '<Directory /var/www/html/app/public>\n    AllowOverride All\n    Require all granted\n</Directory>\n' > /etc/apache2/conf-available/kbforms.conf; \
-    a2enconf kbforms
+    echo 'ServerName localhost' > /etc/apache2/conf-available/servername.conf; \
+    a2enconf kbforms servername
 
 # Réglages PHP raisonnables pour de la collecte avec photos.
 RUN { \

@@ -69,18 +69,22 @@ class Database {
         //   KBF_DB_SSL_NO_VERIFY → '1' pour ne pas vérifier le cert serveur
         //                          (dépannage / pilote — préférer un CA réel)
         $sslCa       = getenv('KBF_DB_SSL_CA') ?: '';
-        $sslOn       = $sslCa !== '' || filter_var(getenv('KBF_DB_SSL') ?: '', FILTER_VALIDATE_BOOL);
         $sslNoVerify = filter_var(getenv('KBF_DB_SSL_NO_VERIFY') ?: '', FILTER_VALIDATE_BOOL);
+        $sslOn       = $sslCa !== ''
+            || $sslNoVerify
+            || filter_var(getenv('KBF_DB_SSL') ?: '', FILTER_VALIDATE_BOOL);
+        // On vérifie le certificat serveur seulement si un CA a été fourni
+        // ET que la vérification n'est pas explicitement coupée. Un MySQL
+        // managé (Aiven, TiDB…) a un CA privé : sans le fichier, on chiffre
+        // sans vérifier — jamais un repli silencieux en clair, qui se ferait
+        // refuser par le serveur et renverrait un 500 opaque.
+        $sslVerify = $sslCa !== '' && !$sslNoVerify;
         if ($sslOn && defined('PDO::MYSQL_ATTR_SSL_CA')) {
-            if ($sslCa !== '' && is_file($sslCa)) {
-                $options[PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
-            }
-            if ($sslNoVerify && defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
+            $options[PDO::MYSQL_ATTR_SSL_CA] = ($sslCa !== '' && is_file($sslCa))
+                ? $sslCa
+                : '/etc/ssl/certs/ca-certificates.crt'; // force la négociation TLS
+            if (!$sslVerify && defined('PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT')) {
                 $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
-                // Sans CA fourni, forcer quand même la négociation TLS.
-                if (!isset($options[PDO::MYSQL_ATTR_SSL_CA])) {
-                    $options[PDO::MYSQL_ATTR_SSL_CA] = '/etc/ssl/certs/ca-certificates.crt';
-                }
             }
         }
 

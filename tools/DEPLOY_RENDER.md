@@ -23,17 +23,30 @@ Toute la config passe par des variables d'env — aucun fichier `app/config/*`
 2. Attendre l'état *Running*. Noter dans l'onglet *Connection information* :
    `Host`, `Port` (≠ 3306), `User` (`avnadmin`), `Password`, `Database name`
    (`defaultdb`), et télécharger le **CA Certificate** (`ca.pem`).
-3. Importer le schéma (depuis ta machine, `mysql` de XAMPP fait l'affaire) :
+3. Importer le schéma. Aiven tourne sous **MySQL 8 strict** : le dump
+   phpMyAdmin (`kbforms.sql`) mélange clés inline et clés différées et ne
+   passe pas tel quel (erreurs `sql_require_primary_key`, puis FK vers une
+   table sans clé unique). Utiliser le script fourni qui reporte toutes les
+   clés étrangères à la fin :
    ```
-   /opt/lampp/bin/mysql \
+   python3 tools/prepare_sql_for_managed_mysql.py kbforms.sql /tmp/kbforms_aiven.sql
+
+   docker run --rm -i mysql:8 mysql \
      --host=<AIVEN_HOST> --port=<AIVEN_PORT> \
      --user=avnadmin --password='<AIVEN_PASS>' \
      --ssl-mode=REQUIRED \
-     defaultdb < kbforms.sql
+     defaultdb < /tmp/kbforms_aiven.sql
    ```
-   (ou `--ssl-ca=ca.pem --ssl-mode=VERIFY_CA` pour vérifier le certificat.)
-4. Vérifier : `... defaultdb -e "SHOW TABLES;"` doit lister `forms`,
-   `questions`, `responses`, `form_agents`, etc.
+   (le client MariaDB de XAMPP ne gère pas l'auth `caching_sha2_password`
+   d'Aiven → passer par l'image `mysql:8` comme ci-dessus.)
+4. Vérifier :
+   ```
+   docker run --rm -i mysql:8 mysql --host=<AIVEN_HOST> --port=<AIVEN_PORT> \
+     --user=avnadmin --password='<AIVEN_PASS>' --ssl-mode=REQUIRED \
+     defaultdb -e "SHOW TABLES; SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema='defaultdb';"
+   ```
+   → ~26 tables (`forms`, `questions`, `responses`, `form_agents`, …) et
+   ~25 clés étrangères.
 
 ## 2. Pousser le code sur GitHub
 
@@ -61,8 +74,7 @@ sélectionner le dépôt → il lit `render.yaml` et crée le service `kbforms`.
 | `KBF_DB_NAME` | `defaultdb` |
 | `KBF_DB_USER` | `avnadmin` |
 | `KBF_DB_PASS` | mot de passe Aiven |
-| `KBF_DB_SSL` | `1` |
-| `KBF_DB_SSL_CA` | `/etc/secrets/aiven-ca.pem` *(voir §5)* — ou ne pas mettre et ajouter `KBF_DB_SSL_NO_VERIFY=1` |
+| `KBF_DB_SSL_NO_VERIFY` | `1` — TLS obligatoire vers Aiven, sans vérifier son CA privé (suffisant pour un pilote ; pour vérifier le cert, voir §5) |
 | `KBF_MOBILE_CLIENT_SECRET` | le **même** secret que `app/config/mobile.php` en local |
 | `MAIL_DRIVER` | `smtp` |
 | `MAIL_HOST` | `smtp.gmail.com` |
@@ -84,10 +96,10 @@ Render → service → **Environment → Secret Files** → *Add Secret File* :
 - *Filename* : `aiven-ca.pem`
 - *Contents* : coller le contenu de `ca.pem` téléchargé en §1
 
-Render le monte dans `/etc/secrets/aiven-ca.pem` → `KBF_DB_SSL_CA` pointe
-dessus. **Alternative rapide** sans secret file : ne pas définir
-`KBF_DB_SSL_CA`, mettre `KBF_DB_SSL_NO_VERIFY=1` (TLS actif, cert serveur non
-vérifié — acceptable pour un pilote).
+Render le monte dans `/etc/secrets/aiven-ca.pem`. Alors, remplacer
+`KBF_DB_SSL_NO_VERIFY` par `KBF_DB_SSL_CA=/etc/secrets/aiven-ca.pem` (le code
+vérifie le certificat serveur dès qu'un CA est fourni). Pour un pilote,
+`KBF_DB_SSL_NO_VERIFY=1` suffit.
 
 ## 6. Vérifications
 
