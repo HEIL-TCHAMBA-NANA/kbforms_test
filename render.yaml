@@ -12,7 +12,7 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /templates      # renvoie 401 (pas 5xx) → service considéré sain
+    healthCheckPath: /auth/config    # public, renvoie 200, sans accès base → health check fiable
     envVars:
       - key: KBF_BASE_URL            # ex. https://kbforms.onrender.com
         sync: false
