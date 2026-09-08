@@ -416,6 +416,7 @@ CREATE TABLE `questions` (
   `cascade_list_id` int(11) DEFAULT NULL COMMENT 'B7 : liste de choix hiérarchique liée (dropdown/radio)',
   `cascade_parent_question_id` int(11) DEFAULT NULL COMMENT 'B7 : question fournissant le filtre parent (NULL = racine)',
   `media_max_duration_s` int(11) DEFAULT NULL COMMENT 'B5 : audio/video, durée max conseillée côté client (s)',
+  `allow_photo` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'M5 : autorise la jointure de photos sur cette question au remplissage (opt-in) — migrations/2026-09-07_question_allow_photo.sql',
   `calculated_expression` text DEFAULT NULL COMMENT 'B6 : type calculated, formule ({q12} + {q13}, age({q4})…)',
   `repeat_group_id` int(11) DEFAULT NULL COMMENT 'B8 : la question appartient à ce groupe répétable (FK repeat_groups)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

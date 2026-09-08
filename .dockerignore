@@ -9,3 +9,10 @@ app/logs/*.log
 logs/*.log
 app/config/*.bak*
 app/config/dev-mode
+
+# Config = variables d'environnement en prod (voir render.yaml). Ne pas
+# embarquer les fichiers de config locaux (secrets Gmail, clés reCAPTCHA
+# localhost, service accounts Google/FCM) dans l'image.
+app/config/*.php
+app/config/*.json
+!app/config/*.example

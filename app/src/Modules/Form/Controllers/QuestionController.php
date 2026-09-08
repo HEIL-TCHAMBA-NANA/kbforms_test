@@ -107,6 +107,9 @@ class QuestionController {
             $extra['repeat_group_id'] = ($data['repeat_group_id'] !== null && $data['repeat_group_id'] !== '')
                 ? (int) $data['repeat_group_id'] : null;
         }
+        if (array_key_exists('allow_photo', $data)) { // M5
+            $extra['allow_photo'] = filter_var($data['allow_photo'], FILTER_VALIDATE_BOOL);
+        }
 
         try {
             $result = $this->service->createQuestion(
@@ -185,6 +188,9 @@ class QuestionController {
         if (array_key_exists('repeat_group_id', $data)) {
             $extra['repeat_group_id'] = ($data['repeat_group_id'] !== null && $data['repeat_group_id'] !== '')
                 ? (int) $data['repeat_group_id'] : null;
+        }
+        if (array_key_exists('allow_photo', $data)) { // M5
+            $extra['allow_photo'] = filter_var($data['allow_photo'], FILTER_VALIDATE_BOOL);
         }
 
         $result = $this->service->updateQuestion(

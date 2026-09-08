@@ -56,22 +56,23 @@ class QuestionModel {
             ? (string) $extra['calculated_expression'] : null;
         $repeatGroupId = array_key_exists('repeat_group_id', $extra) && $extra['repeat_group_id'] !== null
             ? (int) $extra['repeat_group_id'] : null;
+        $allowPhoto = !empty($extra['allow_photo']) ? 1 : 0; // M5
 
         try {
             $stmt = $this->db->prepare("
                 INSERT INTO questions
                     (form_id, type, label, help_text, required, position, image_data, section_index,
                      scale_min, scale_max, scale_step, grid_rows, grid_columns, phone_default_country,
-                     cascade_list_id, cascade_parent_question_id, media_max_duration_s, calculated_expression,
-                     repeat_group_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     cascade_list_id, cascade_parent_question_id, media_max_duration_s, allow_photo,
+                     calculated_expression, repeat_group_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             $stmt->execute([
                 $formId, $type, $label, ($helpText !== null && $helpText !== '' ? $helpText : null),
                 (int)$required, $position,
                 $imageData, $sectionIndex,
                 $scaleMin, $scaleMax, $scaleStep, $gridRows, $gridCols, $phoneDefaultCountry,
-                $cascadeListId, $cascadeParentQid, $mediaMaxDuration, $calcExpr, $repeatGroupId,
+                $cascadeListId, $cascadeParentQid, $mediaMaxDuration, $allowPhoto, $calcExpr, $repeatGroupId,
             ]);
             return (int)$this->db->lastInsertId();
         } catch (\PDOException $e) {
@@ -99,8 +100,8 @@ class QuestionModel {
             SELECT q.id, q.type, q.label, q.help_text, q.required, q.position, q.image_data, q.section_index,
                    q.scale_min, q.scale_max, q.scale_step,
                    q.grid_rows, q.grid_columns, q.phone_default_country,
-                   q.cascade_list_id, q.cascade_parent_question_id, q.media_max_duration_s, q.calculated_expression,
-                   q.repeat_group_id,
+                   q.cascade_list_id, q.cascade_parent_question_id, q.media_max_duration_s, q.allow_photo,
+                   q.calculated_expression, q.repeat_group_id,
                    o.id AS option_id, o.value AS option_value
             FROM questions q
             LEFT JOIN options o ON o.question_id = q.id
@@ -123,6 +124,7 @@ class QuestionModel {
                     'position'      => (int)$row['position'],
                     'image_data'    => $row['image_data'],
                     'section_index' => (int)($row['section_index'] ?? 0),
+                    'allow_photo'   => (bool)($row['allow_photo'] ?? 0), // M5 — toujours exposé
                     'options'       => [],
                 ];
 
@@ -235,6 +237,10 @@ class QuestionModel {
         if (array_key_exists('media_max_duration_s', $extra)) {
             $s = $this->db->prepare("UPDATE questions SET media_max_duration_s = ? WHERE id = ?");
             $s->execute([$extra['media_max_duration_s'] !== null ? (int) $extra['media_max_duration_s'] : null, $id]);
+        }
+        if (array_key_exists('allow_photo', $extra)) { // M5
+            $s = $this->db->prepare("UPDATE questions SET allow_photo = ? WHERE id = ?");
+            $s->execute([!empty($extra['allow_photo']) ? 1 : 0, $id]);
         }
         if (array_key_exists('calculated_expression', $extra)) {
             $s = $this->db->prepare("UPDATE questions SET calculated_expression = ? WHERE id = ?");

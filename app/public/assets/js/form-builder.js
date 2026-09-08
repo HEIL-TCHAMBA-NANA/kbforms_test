@@ -181,6 +181,11 @@ KBF.builder = {
             <input type="checkbox" ${q.required ? 'checked' : ''} onchange="KBF.builder.edit(${q.id},'required',this.checked)">
             <span class="bb-switch-track"></span> Obligatoire
           </label>
+          ${['signature','audio','video'].includes(q.type) ? '' : `
+          <label class="bb-switch" title="Ajoute un bouton « Prendre une photo » sous ce champ, dans l'app mobile de collecte">
+            <input type="checkbox" ${q.allow_photo ? 'checked' : ''} onchange="KBF.builder.edit(${q.id},'allow_photo',this.checked)">
+            <span class="bb-switch-track"></span> Photo autorisée
+          </label>`}
           ${this.groupsOfSection(q.section_index ?? 0).length ? `
             <select class="bb-adv-input" style="width:auto;max-width:220px" onchange="KBF.builder.setRepeatGroup(${q.id}, this.value)">
               <option value="">— Hors groupe répétable —</option>
@@ -513,6 +518,7 @@ KBF.builder = {
     }
     if (newType !== 'audio' && newType !== 'video') q.media_max_duration_s = null;
     if (newType !== 'calculated') q.calculated_expression = null;
+    if (['signature','audio','video'].includes(newType)) q.allow_photo = false; // M5 : capture média dédiée
     await this.put(q);
     this.render();
   },
