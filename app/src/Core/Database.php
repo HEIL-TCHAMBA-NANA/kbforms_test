@@ -91,6 +91,13 @@ class Database {
         try {
             self::$connection = new PDO($dsn, $cfg['username'], $cfg['password'], $options);
         } catch (PDOException $e) {
+            // DEBUG déploiement : trace l'erreur exacte dans le flux de logs.
+            error_log('[KBF DB] connexion echouee | dsn=' . preg_replace('/password=[^;]*/', 'password=***', $dsn)
+                . ' | user=' . $cfg['username']
+                . ' | ssl_ca=' . ($options[\PDO::MYSQL_ATTR_SSL_CA] ?? '(none)')
+                . ' | ca_exists=' . (isset($options[\PDO::MYSQL_ATTR_SSL_CA]) && is_file($options[\PDO::MYSQL_ATTR_SSL_CA]) ? 'yes' : 'no')
+                . ' | verify=' . (($options[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] ?? true) ? 'on' : 'off')
+                . ' | erreur=' . $e->getMessage());
             http_response_code(500);
             header('Content-Type: application/json');
             die(json_encode([
