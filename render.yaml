@@ -30,19 +30,11 @@ services:
         value: "1"
       - key: KBF_MOBILE_CLIENT_SECRET
         sync: false
-      - key: MAIL_DRIVER
-        value: smtp
-      - key: MAIL_HOST
-        value: smtp.gmail.com
-      - key: MAIL_PORT
-        value: "587"
-      - key: MAIL_ENCRYPTION
-        value: tls
-      - key: MAIL_USERNAME
+      - key: MAIL_DRIVER            # 'brevo' : API HTTP (port 443) — Render bloque le SMTP sortant
+        value: brevo
+      - key: MAIL_BREVO_API_KEY    # clé "xkeysib-…" créée sur brevo.com (SMTP & API → API Keys)
         sync: false
-      - key: MAIL_PASSWORD          # mot de passe d'application Gmail
-        sync: false
-      - key: MAIL_FROM_EMAIL
+      - key: MAIL_FROM_EMAIL       # expéditeur vérifié dans Brevo
         sync: false
       - key: MAIL_FROM_NAME
         value: KBForms
