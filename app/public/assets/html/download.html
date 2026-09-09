@@ -33,14 +33,14 @@
         </div>
 
         <div id="dl-ready" class="hidden mt-6">
-          <a id="dl-btn" href="#" download
+          <a id="dl-btn" href="/download/apk" target="_blank" rel="noopener"
              class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
             </svg>
             Télécharger l'APK
           </a>
-          <p id="dl-hint" class="text-xs text-gray-400 mt-2"></p>
+          <p id="dl-hint" class="text-xs text-gray-400 mt-2">Le téléchargement démarre dans un nouvel onglet.</p>
         </div>
 
         <div id="dl-none" class="hidden mt-6 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
@@ -77,24 +77,8 @@
       renderTopBar({ title: 'Application mobile' });
 
       fetch('/auth/config').then(r => r.json()).then(c => {
-        const url = (c && c.mobile_apk_url) || '';
-        if (url) {
-          const btn = document.getElementById('dl-btn');
-          btn.href = url;
-          // Un lien inter-domaine (release GitHub) ne peut pas forcer `download` :
-          // on ouvre dans un nouvel onglet, le navigateur gère le téléchargement.
-          if (/^https?:\/\//i.test(url) && !url.startsWith(location.origin)) {
-            btn.removeAttribute('download');
-            btn.target = '_blank';
-            btn.rel = 'noopener';
-          }
-          document.getElementById('dl-hint').textContent = url.startsWith('/downloads/')
-            ? 'Fichier hébergé sur ce serveur.'
-            : url;
-          document.getElementById('dl-ready').classList.remove('hidden');
-        } else {
-          document.getElementById('dl-none').classList.remove('hidden');
-        }
+        const available = !!(c && c.mobile_apk);
+        document.getElementById(available ? 'dl-ready' : 'dl-none').classList.remove('hidden');
       }).catch(() => {
         document.getElementById('dl-none').classList.remove('hidden');
       });

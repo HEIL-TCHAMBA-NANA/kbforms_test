@@ -4,12 +4,17 @@ La sidebar du web affiche un onglet **« Application mobile »** → page `/down
 (bouton de téléchargement + instructions d'installation Android).
 
 L'onglet **n'apparaît que si une distribution est configurée**. `GET /auth/config`
-renvoie `mobile_apk_url`, résolu dans cet ordre :
+renvoie un booléen `mobile_apk` (jamais l'URL réelle). Le bouton de la page
+pointe vers **`GET /download/apk`**, une redirection 302 côté serveur vers l'APK,
+résolue dans cet ordre :
 
 1. **Fichier livré dans l'image** : `app/public/downloads/kbforms.apk` existe
-   → l'URL est `/downloads/kbforms.apk` (servi directement par Apache).
+   → redirige vers `/downloads/kbforms.apk` (servi directement par Apache).
 2. Sinon **variable d'environnement** `KBF_MOBILE_APK_URL` (URL absolue).
-3. Sinon `null` → onglet masqué.
+3. Sinon `mobile_apk = false`, `/download/apk` renvoie 404 → onglet masqué.
+
+L'URL GitHub (ou autre) n'est donc jamais visible dans la page ni dans le HTML —
+seul `/download/apk` l'est.
 
 ---
 

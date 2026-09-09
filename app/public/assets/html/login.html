@@ -118,7 +118,7 @@
             </div>
             <div class="mx-auto flex items-center gap-1.5 text-[11px] text-gray-400 bg-white border border-gray-200 rounded-md px-2.5 py-0.5">
               <svg viewBox="0 0 24 24" fill="currentColor" class="w-2.5 h-2.5"><path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5Zm3 8H9V6a3 3 0 0 1 6 0v3Z"/></svg>
-              kbforms.local
+              <span id="fake-url-host">kbforms.local</span>
             </div>
           </div>
 
@@ -459,6 +459,10 @@
     window.addEventListener('DOMContentLoaded', () => {
       const em = getQueryParam('email');
       if (em) { const f = document.getElementById('login-email'); if (f) f.value = em; }
+
+      // Barre d'adresse décorative : afficher le vrai domaine, pas "kbforms.local"
+      const fakeHost = document.getElementById('fake-url-host');
+      if (fakeHost && location.host) fakeHost.textContent = location.host;
 
       // Capacités d'auth configurées côté serveur : bouton Google + CAPTCHA
       fetch('/auth/config').then(r => r.json()).then(c => {

@@ -18,15 +18,29 @@ class AuthController {
         echo json_encode([
             'google'             => (new GoogleAuthService())->isEnabled(),
             'recaptcha_site_key' => \Core\Recaptcha::isEnabled() ? \Core\Recaptcha::siteKey() : null,
-            // Lien de téléchargement de l'app mobile (APK) — affiché dans la
-            // sidebar / la page /download quand il est défini. Priorité :
-            //   1. fichier livré dans l'image  app/public/downloads/kbforms.apk
-            //   2. variable d'env KBF_MOBILE_APK_URL (ex. release GitHub)
-            'mobile_apk_url'     => $this->mobileApkUrl(),
+            // Distribution de l'app mobile disponible ? (booléen seulement —
+            // le lien réel n'est jamais exposé au client : passer par /download/apk)
+            'mobile_apk'         => $this->mobileApkUrl() !== null,
         ]);
     }
 
-    /** URL de l'APK mobile, ou null si aucune distribution n'est configurée. */
+    // ── GET /download/apk — redirige vers l'APK sans exposer l'URL réelle ─────
+    public function mobileApkDownload() {
+        $url = $this->mobileApkUrl();
+        if ($url === null) {
+            http_response_code(404);
+            header('Content-Type: application/json');
+            echo json_encode(['error' => 'Aucune application mobile disponible']);
+            return;
+        }
+        header('Location: ' . $url, true, 302);
+    }
+
+    /**
+     * URL de l'APK mobile, ou null si aucune distribution n'est configurée.
+     * Priorité : 1. fichier livré dans l'image  app/public/downloads/kbforms.apk
+     *            2. variable d'env KBF_MOBILE_APK_URL (ex. release GitHub)
+     */
     private function mobileApkUrl(): ?string {
         if (is_file(__DIR__ . '/../../../../public/downloads/kbforms.apk')) {
             return '/downloads/kbforms.apk';

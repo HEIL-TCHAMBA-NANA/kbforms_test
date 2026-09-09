@@ -107,6 +107,7 @@ $router->add("POST",   "/auth/refresh",                      [$authController,  
 $router->add("POST",   "/auth/forgot-password",              [$authController,          "forgotPassword"]);
 $router->add("POST",   "/auth/reset-password",               [$authController,          "resetPassword"]);
 $router->add("GET",    "/auth/config",                       [$authController,          "authConfig"]);
+$router->add("GET",    "/download/apk",                      [$authController,          "mobileApkDownload"]);   // redirige vers l'APK (URL réelle non exposée)
 $router->add("GET",    "/auth/google",                       [$authController,          "googleStart"]);
 $router->add("GET",    "/auth/google/callback",              [$authController,          "googleCallback"]);
 
