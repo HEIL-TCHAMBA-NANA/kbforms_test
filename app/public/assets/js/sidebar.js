@@ -21,6 +21,12 @@ function renderSidebar(activeKey = '') {
     items.push({ key: 'roles', href: '/roles', label: 'Rôles & Permissions', icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>' });
   }
 
+  // « Application mobile » — visible seulement si une distribution APK est
+  // configurée côté serveur (fichier livré ou KBF_MOBILE_APK_URL).
+  if (window.__kbfMobileApkUrl) {
+    items.push({ key: 'download', href: '/download', label: 'Application mobile', icon: '<path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a1 1 0 001-1V4a1 1 0 00-1-1H8a1 1 0 00-1 1v16a1 1 0 001 1z"/>' });
+  }
+
   const navHtml = items.map(it => {
     const active = it.key === activeKey;
     return `
@@ -109,6 +115,16 @@ function renderTopBar({ title = '', actions = '' } = {}) {
 window.addEventListener('kbf:profile-loaded', () => {
   if (document.getElementById('sidebar-mount')) renderSidebar();
 });
+
+// Récupère une fois le lien de l'app mobile puis rafraîchit la sidebar.
+(function loadMobileApkLink() {
+  if (window.__kbfMobileApkUrl !== undefined) return;
+  window.__kbfMobileApkUrl = null;
+  fetch('/auth/config').then(r => r.json()).then(c => {
+    window.__kbfMobileApkUrl = (c && c.mobile_apk_url) || null;
+    if (window.__kbfMobileApkUrl && document.getElementById('sidebar-mount')) renderSidebar();
+  }).catch(() => {});
+})();
 
 window.renderSidebar = renderSidebar;
 window.renderTopBar  = renderTopBar;

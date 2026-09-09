@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Application mobile · KBForms</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg" />
+  <link rel="stylesheet" href="/assets/css/kbforms.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+  <div id="sidebar-mount"></div>
+  <div class="md:pl-60 min-h-screen flex flex-col">
+    <div id="topbar-mount"></div>
+    <main class="flex-1 px-4 md:px-8 py-6 max-w-3xl w-full mx-auto animate-fade-in">
+
+      <div class="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 md:p-8">
+        <div class="flex items-start gap-4">
+          <div class="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center shrink-0">
+            <svg class="w-7 h-7 text-indigo-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <rect x="7" y="3" width="10" height="18" rx="2" /><path d="M12 18h.01" stroke-linecap="round" />
+            </svg>
+          </div>
+          <div class="min-w-0">
+            <h2 class="text-lg font-bold text-gray-900" style="font-family:'Plus Jakarta Sans'">KBForms pour Android</h2>
+            <p class="text-sm text-gray-600 mt-1">
+              Version de test destinée aux enquêteurs de terrain (collecte hors-ligne, synchronisation
+              automatique). Pas encore publiée sur le Play Store : installation manuelle du fichier APK.
+            </p>
+          </div>
+        </div>
+
+        <div id="dl-ready" class="hidden mt-6">
+          <a id="dl-btn" href="#" download
+             class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-3 rounded-xl transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Télécharger l'APK
+          </a>
+          <p id="dl-hint" class="text-xs text-gray-400 mt-2"></p>
+        </div>
+
+        <div id="dl-none" class="hidden mt-6 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          Le fichier n'est pas encore disponible en ligne. Reviens plus tard ou contacte l'administrateur.
+        </div>
+
+        <hr class="my-6 border-gray-100" />
+
+        <h3 class="text-sm font-semibold text-gray-900 mb-2">Installation sur le téléphone</h3>
+        <ol class="text-sm text-gray-600 space-y-1.5 list-decimal pl-5">
+          <li>Ouvre cette page depuis le téléphone Android et appuie sur <em>Télécharger l'APK</em>.</li>
+          <li>À l'ouverture du fichier, Android demande d'autoriser l'installation depuis cette source
+              (<em>Paramètres → Applications → Accès spécial → Installer des applis inconnues</em>) : accepte.</li>
+          <li>Appuie sur <em>Installer</em>, puis <em>Ouvrir</em>.</li>
+          <li>Connecte-toi avec le compte enquêteur (ou les identifiants d'agent reçus par email).</li>
+        </ol>
+
+        <p class="text-xs text-gray-400 mt-4">
+          Pour mettre à jour l'application plus tard, il suffit de réinstaller la nouvelle version APK
+          par-dessus l'ancienne — les données locales sont conservées.
+        </p>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/assets/js/utils.js"></script>
+  <script src="/assets/js/api.js"></script>
+  <script src="/assets/js/auth.js"></script>
+  <script src="/assets/js/sidebar.js"></script>
+  <script>
+    if (KBF_AUTH.requireAuth()) {
+      renderSidebar('download');
+      renderTopBar({ title: 'Application mobile' });
+
+      fetch('/auth/config').then(r => r.json()).then(c => {
+        const url = (c && c.mobile_apk_url) || '';
+        if (url) {
+          const btn = document.getElementById('dl-btn');
+          btn.href = url;
+          // Un lien inter-domaine (release GitHub) ne peut pas forcer `download` :
+          // on ouvre dans un nouvel onglet, le navigateur gère le téléchargement.
+          if (/^https?:\/\//i.test(url) && !url.startsWith(location.origin)) {
+            btn.removeAttribute('download');
+            btn.target = '_blank';
+            btn.rel = 'noopener';
+          }
+          document.getElementById('dl-hint').textContent = url.startsWith('/downloads/')
+            ? 'Fichier hébergé sur ce serveur.'
+            : url;
+          document.getElementById('dl-ready').classList.remove('hidden');
+        } else {
+          document.getElementById('dl-none').classList.remove('hidden');
+        }
+      }).catch(() => {
+        document.getElementById('dl-none').classList.remove('hidden');
+      });
+    }
+  </script>
+</body>
+</html>

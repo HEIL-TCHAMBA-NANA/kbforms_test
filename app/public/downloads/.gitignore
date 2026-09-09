@@ -1,0 +1,3 @@
+# APK ignorés — voir tools/MOBILE_APK_DISTRIBUTION.md
+*.apk
+!.gitkeep

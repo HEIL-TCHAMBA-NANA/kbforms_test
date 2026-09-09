@@ -12,7 +12,7 @@ services:
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
-    healthCheckPath: /auth/config    # public, renvoie 200, sans accès base → health check fiable
+    healthCheckPath: /auth/config     # public, 200, sans accès base → health check fiable (Render exige un 2xx)
     envVars:
       - key: KBF_BASE_URL            # ex. https://kbforms.onrender.com
         sync: false
@@ -29,6 +29,8 @@ services:
       - key: KBF_DB_SSL_NO_VERIFY    # "1" : TLS obligatoire vers Aiven, sans vérifier le CA privé (suffisant pour un pilote)
         value: "1"
       - key: KBF_MOBILE_CLIENT_SECRET
+        sync: false
+      - key: KBF_MOBILE_APK_URL     # lien de l'APK de test (ex. release GitHub) ; vide = onglet masqué. Ignoré si app/public/downloads/kbforms.apk est livré dans l'image
         sync: false
       - key: MAIL_DRIVER            # 'brevo' : API HTTP (port 443) — Render bloque le SMTP sortant
         value: brevo

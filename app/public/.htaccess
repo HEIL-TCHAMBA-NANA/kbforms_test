@@ -1,3 +1,9 @@
+# APK de l'app mobile : bon type MIME → Android propose l'installation,
+# desktop télécharge. Fichier optionnel dans downloads/ (voir tools/MOBILE_APK_DISTRIBUTION.md).
+<IfModule mod_mime.c>
+  AddType application/vnd.android.package-archive .apk
+</IfModule>
+
 # Activer la réécriture d'URL
 RewriteEngine On
 

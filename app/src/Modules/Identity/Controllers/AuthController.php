@@ -18,7 +18,21 @@ class AuthController {
         echo json_encode([
             'google'             => (new GoogleAuthService())->isEnabled(),
             'recaptcha_site_key' => \Core\Recaptcha::isEnabled() ? \Core\Recaptcha::siteKey() : null,
+            // Lien de téléchargement de l'app mobile (APK) — affiché dans la
+            // sidebar / la page /download quand il est défini. Priorité :
+            //   1. fichier livré dans l'image  app/public/downloads/kbforms.apk
+            //   2. variable d'env KBF_MOBILE_APK_URL (ex. release GitHub)
+            'mobile_apk_url'     => $this->mobileApkUrl(),
         ]);
+    }
+
+    /** URL de l'APK mobile, ou null si aucune distribution n'est configurée. */
+    private function mobileApkUrl(): ?string {
+        if (is_file(__DIR__ . '/../../../../public/downloads/kbforms.apk')) {
+            return '/downloads/kbforms.apk';
+        }
+        $url = trim((string) (getenv('KBF_MOBILE_APK_URL') ?: ''));
+        return $url !== '' ? $url : null;
     }
 
     /** Refuse la requête si le CAPTCHA est actif et le jeton absent/invalide. */

@@ -46,6 +46,8 @@ $htmlPages = [
     '/form-public.html'     => 'form-public.html',
     '/invite'               => 'invite.html',
     '/invite.html'          => 'invite.html',
+    '/download'             => 'download.html',
+    '/download.html'        => 'download.html',
 ];
 
 if (isset($htmlPages[$uri])
